@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GAMMY - Habit Tracker & Success Platform</title>
+    <script>
+      // Global error handlers to capture and suppress errors injected by third-party browser extensions
+      window.addEventListener('error', function(event) {
+        if (
+          (event.message && (
+            event.message.indexOf('browser extension') !== -1 ||
+            event.message.indexOf('extension') !== -1
+          )) ||
+          (event.filename && event.filename.indexOf('chrome-extension') !== -1)
+        ) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+        }
+      }, true);
+
+      window.addEventListener('unhandledrejection', function(event) {
+        if (
+          event.reason && 
+          event.reason.message && (
+            event.reason.message.indexOf('browser extension') !== -1 ||
+            event.reason.message.indexOf('extension') !== -1
+          )
+        ) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+        }
+      }, true);
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,151 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom Minimal Scrollbar Utilities */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #E2E8F0;
+  border-radius: 99px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #CBD5E1;
+}
+
+/* Keyframe animations */
+@keyframes slideLeft {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translate(-50%, -20px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg); }
+  75% { transform: rotate(10deg); }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.94; transform: scale(1.02); }
+}
+
+.animate-slide-left {
+  animation: slideLeft 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-wiggle {
+  animation: wiggle 1.4s ease-in-out infinite alternate;
+}
+
+.animate-pulse-soft {
+  animation: pulseSoft 3s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin 8s linear infinite;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Global Dynamic Theme Variable Definitions */
+:root {
+  --sabit-primary: #2563EB;
+  --sabit-primary-hover: #1D4ED8;
+  --sabit-primary-dark: #60A5FA;
+  --sabit-primary-light: rgba(37, 99, 235, 0.15);
+  --sabit-primary-border: rgba(37, 99, 235, 0.3);
+}
+
+/* Override Tailwind's compiled arbitrary style values dynamically */
+.bg-\[\#2563EB\],
+.bg-primary {
+  background-color: var(--sabit-primary) !important;
+}
+
+.text-\[\#2563EB\],
+.text-primary {
+  color: var(--sabit-primary) !important;
+}
+
+.border-\[\#2563EB\],
+.border-primary {
+  border-color: var(--sabit-primary) !important;
+}
+
+.accent-\[\#2563EB\],
+.accent-primary {
+  accent-color: var(--sabit-primary) !important;
+}
+
+.from-\[\#2563EB\] {
+  --tw-gradient-from: var(--sabit-primary) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.to-\[\#2563EB\] {
+  --tw-gradient-to: var(--sabit-primary) !important;
+}
+
+.hover\:bg-\[\#1D4ED8\]:hover,
+.hover\:bg-primary-hover:hover {
+  background-color: var(--sabit-primary-hover) !important;
+}
+
+.hover\:from-\[\#1D4ED8\]:hover {
+  --tw-gradient-from: var(--sabit-primary-hover) !important;
+}
+
+/* Core dynamic responsive styles */
+.text-blue-400 {
+  color: var(--sabit-primary-dark) !important;
+}
+
+.bg-blue-950\/40 {
+  background-color: var(--sabit-primary-light) !important;
+}
+
+.border-blue-900\/40 {
+  border-color: var(--sabit-primary-border) !important;
+}
+
+.text-blue-200 {
+  color: var(--sabit-primary-dark) !important;
+}
+
+

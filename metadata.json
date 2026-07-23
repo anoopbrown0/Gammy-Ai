@@ -1,0 +1,6 @@
+{
+  "name": "GAMMY - Habit Tracker & Success Platform",
+  "description": "Desktop dashboard for GAMMY – featuring advanced habit tracking, daily progress metrics, upcoming reminders, and weekly analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

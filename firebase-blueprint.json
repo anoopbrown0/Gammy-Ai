@@ -1,0 +1,151 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile information and settings",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "plan": { "type": "string" },
+        "timezone": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["email"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "A habit tracking definition",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "icon": { "type": "string" },
+        "color": { "type": "string" },
+        "category": { "type": "string" },
+        "goal": { "type": "string" },
+        "frequency": { "type": "string" },
+        "reminderTime": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "category"]
+    },
+    "HabitLog": {
+      "title": "Habit Log",
+      "description": "A record of habit execution for a specific date",
+      "type": "object",
+      "properties": {
+        "habitId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "skipped", "missed"] },
+        "completedAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["habitId", "date", "status"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "A user defined goal",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "target": { "type": "string" },
+        "progress": { "type": "number" },
+        "deadline": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "Reminder settings for a habit",
+      "type": "object",
+      "properties": {
+        "habitId": { "type": "string" },
+        "time": { "type": "string" },
+        "frequency": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      },
+      "required": ["habitId"]
+    },
+    "AIInsight": {
+      "title": "AI Insight",
+      "description": "Generated AI coaching insight",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "generatedAt": { "type": "string" },
+        "relatedHabitIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title", "message"]
+    },
+    "WeeklyReport": {
+      "title": "Weekly Report",
+      "description": "Weekly performance report",
+      "type": "object",
+      "properties": {
+        "weekStart": { "type": "string" },
+        "weekEnd": { "type": "string" },
+        "completionRate": { "type": "number" },
+        "successScore": { "type": "number" },
+        "habitsCompleted": { "type": "number" },
+        "habitsMissed": { "type": "number" },
+        "aiSummary": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["weekStart", "weekEnd"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "A chat message in coaching log",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["role", "content"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profile information"
+    },
+    "/users/{userId}/habits/{habitId}": {
+      "schema": "Habit",
+      "description": "Stores individual habits for each user"
+    },
+    "/users/{userId}/habitLogs/{logId}": {
+      "schema": "HabitLog",
+      "description": "Stores daily logs for habits"
+    },
+    "/users/{userId}/goals/{goalId}": {
+      "schema": "Goal",
+      "description": "Stores user goals"
+    },
+    "/users/{userId}/reminders/{reminderId}": {
+      "schema": "Reminder",
+      "description": "Stores habit reminders"
+    },
+    "/users/{userId}/aiInsights/{insightId}": {
+      "schema": "AIInsight",
+      "description": "Stores generated AI insights"
+    },
+    "/users/{userId}/weeklyReports/{reportId}": {
+      "schema": "WeeklyReport",
+      "description": "Stores weekly reports"
+    },
+    "/users/{userId}/chatHistory/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Stores coaching chat history"
+    }
+  }
+}
