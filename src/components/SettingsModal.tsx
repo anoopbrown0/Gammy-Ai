@@ -76,10 +76,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/60">
           <div className="flex items-center gap-2">
-            <LucideIcon name="Settings" size={16} className="text-blue-500 animate-spin-slow" />
+            <LucideIcon name="Settings" size={16} className="text-[#007AFF]" />
             <div>
-              <h3 className="text-sm font-black tracking-tight leading-none">Ledger Configuration</h3>
-              <p className="text-[10px] text-slate-400 mt-1">Manage profile, preferences, and workspace variables.</p>
+              <h3 className="text-sm font-bold tracking-tight leading-none">Account & Settings</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Manage your profile, preferences, and habits.</p>
             </div>
           </div>
           <button 
@@ -105,12 +105,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               type="text"
               value={profileName}
               onChange={(e) => setProfileName(e.target.value)}
-              className={`w-full px-3.5 py-2 text-xs font-bold rounded-xl border focus:outline-none focus:ring-1 transition-all ${
+              className={`w-full px-3.5 py-2 text-xs font-semibold rounded-xl border focus:outline-none focus:ring-1 transition-all ${
                 isDark 
-                  ? "bg-slate-900 border-slate-800 text-white focus:ring-blue-500 focus:border-blue-500" 
-                  : "bg-slate-50 border-slate-200 text-[#0F172A] focus:ring-blue-600 focus:border-blue-600"
+                  ? "bg-slate-900 border-slate-800 text-white focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-500" 
+                  : "bg-slate-50 border-slate-200 text-[#0F172A] focus:ring-blue-600 focus:border-blue-600 placeholder:text-slate-400"
               }`}
-              placeholder="e.g., Anoop Brown"
+              placeholder="Enter your name"
               required
             />
           </div>
@@ -125,12 +125,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               type="email"
               value={profileEmail}
               onChange={(e) => setProfileEmail(e.target.value)}
-              className={`w-full px-3.5 py-2 text-xs font-bold rounded-xl border focus:outline-none focus:ring-1 transition-all ${
+              className={`w-full px-3.5 py-2 text-xs font-semibold rounded-xl border focus:outline-none focus:ring-1 transition-all ${
                 isDark 
-                  ? "bg-slate-900 border-slate-800 text-white focus:ring-blue-500 focus:border-blue-500" 
-                  : "bg-slate-50 border-slate-200 text-[#0F172A] focus:ring-blue-600 focus:border-blue-600"
+                  ? "bg-slate-900 border-slate-800 text-white focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-500" 
+                  : "bg-slate-50 border-slate-200 text-[#0F172A] focus:ring-blue-600 focus:border-blue-600 placeholder:text-slate-400"
               }`}
-              placeholder="e.g., anoop@sabit.ai"
+              placeholder="name@example.com"
             />
           </div>
 

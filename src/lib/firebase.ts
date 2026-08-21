@@ -7,7 +7,8 @@ import {
   onAuthStateChanged,
   User as FirebaseUser,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  signInAnonymously
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -25,36 +26,51 @@ import {
 } from "firebase/firestore";
 import firebaseAppletConfig from "../../firebase-applet-config.json";
 
-// Read environment variables with fallback to firebase-applet-config.json
-const metaEnv = (import.meta as any).env || {};
-const firebaseConfig = {
-  apiKey: firebaseAppletConfig?.apiKey || metaEnv.VITE_FIREBASE_API_KEY,
-  authDomain: firebaseAppletConfig?.authDomain || metaEnv.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: firebaseAppletConfig?.projectId || metaEnv.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: firebaseAppletConfig?.storageBucket || metaEnv.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: firebaseAppletConfig?.messagingSenderId || metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: firebaseAppletConfig?.appId || metaEnv.VITE_FIREBASE_APP_ID,
-  firestoreDatabaseId: firebaseAppletConfig?.firestoreDatabaseId
-};
+// Load configuration from firebase-applet-config.json
+const firebaseConfig = firebaseAppletConfig;
 
-const hasCredentials = !!firebaseConfig.apiKey;
-
-let app;
+let app: any;
 let authInstance: any;
 let dbInstance: any;
 let isFirebaseEnabled = false;
 
-if (hasCredentials) {
-  try {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    authInstance = getAuth(app);
-    dbInstance = firebaseConfig.firestoreDatabaseId
-      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-      : getFirestore(app);
-    isFirebaseEnabled = true;
-    console.log("🔥 Firebase successfully initialized with live client SDK configuration.");
-  } catch (error) {
-    console.error("Failed to initialize Firebase client SDK:", error);
+try {
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  authInstance = getAuth(app);
+  dbInstance = (firebaseConfig as any)?.firestoreDatabaseId 
+    ? getFirestore(app, (firebaseConfig as any).firestoreDatabaseId)
+    : getFirestore(app);
+  isFirebaseEnabled = true;
+  console.log("🔥 Firebase successfully initialized with project:", firebaseConfig.projectId, "| DB:", (firebaseConfig as any)?.firestoreDatabaseId);
+} catch (error) {
+  console.error("Failed to initialize Firebase client SDK:", error);
+}
+
+// Connection test for Firestore per SKILL.md
+async function testFirestoreConnection() {
+  if (isFirebaseEnabled && dbInstance) {
+    try {
+      await getDocFromServer(doc(dbInstance, "test", "connection"));
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("the client is offline")) {
+        console.warn("Firestore client is offline, using offline cache.");
+      }
+    }
+  }
+}
+testFirestoreConnection();
+
+// Auto-initialize anonymous auth if no user is present to ensure immediate Firestore persistence
+export async function ensureAnonymousAuth() {
+  if (isFirebaseEnabled && authInstance) {
+    if (!authInstance.currentUser) {
+      try {
+        await signInAnonymously(authInstance);
+        console.log("🔥 Anonymous session authenticated for persistent Firestore ledger.");
+      } catch (err) {
+        console.warn("Anonymous auth notice (using local-first persistence):", err);
+      }
+    }
   }
 }
 
@@ -116,7 +132,9 @@ class MockAuth {
     // Check if we have a saved mock user session in localStorage
     const savedUser = localStorage.getItem("sabit_mock_user");
     if (savedUser) {
-      this.currentUser = JSON.parse(savedUser);
+      try {
+        this.currentUser = JSON.parse(savedUser);
+      } catch (_) {}
     }
   }
 
@@ -134,16 +152,57 @@ class MockAuth {
   }
 
   async signInWithPopup() {
-    // Generate a beautiful Mock User
+    const email = localStorage.getItem("sabit_profile_email") || "anoopbrown0@gmail.com";
+    const name = localStorage.getItem("sabit_profile_name") || "Anoop Brown";
+    const safeUid = `user_${btoa(email.toLowerCase()).replace(/[^a-zA-Z0-9]/g, '_')}`;
     this.currentUser = {
-      uid: "mock_user_anoop_brown",
-      displayName: localStorage.getItem("sabit_profile_name") || "Anoop Brown",
-      email: localStorage.getItem("sabit_profile_email") || "anoopbrown0@gmail.com",
+      uid: safeUid,
+      displayName: name,
+      email: email,
       photoURL: localStorage.getItem("sabit_banner_image") || null,
       emailVerified: true,
       isAnonymous: false
     };
     localStorage.setItem("sabit_mock_user", JSON.stringify(this.currentUser));
+    localStorage.setItem("sabit_last_uid", safeUid);
+    this.triggerChange();
+    return { user: this.currentUser };
+  }
+
+  async signInWithEmailAndPassword(email: string, _pass: string) {
+    const safeUid = `user_${btoa(email.toLowerCase()).replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const name = email.split("@")[0];
+    this.currentUser = {
+      uid: safeUid,
+      displayName: name.charAt(0).toUpperCase() + name.slice(1),
+      email: email,
+      photoURL: null,
+      emailVerified: true,
+      isAnonymous: false
+    };
+    localStorage.setItem("sabit_mock_user", JSON.stringify(this.currentUser));
+    localStorage.setItem("sabit_last_uid", safeUid);
+    localStorage.setItem("sabit_profile_email", email);
+    localStorage.setItem("sabit_profile_name", this.currentUser.displayName);
+    this.triggerChange();
+    return { user: this.currentUser };
+  }
+
+  async createUserWithEmailAndPassword(email: string, _pass: string, name?: string) {
+    const safeUid = `user_${btoa(email.toLowerCase()).replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const displayName = name || (email.split("@")[0].charAt(0).toUpperCase() + email.split("@")[0].slice(1));
+    this.currentUser = {
+      uid: safeUid,
+      displayName: displayName,
+      email: email,
+      photoURL: null,
+      emailVerified: true,
+      isAnonymous: false
+    };
+    localStorage.setItem("sabit_mock_user", JSON.stringify(this.currentUser));
+    localStorage.setItem("sabit_last_uid", safeUid);
+    localStorage.setItem("sabit_profile_email", email);
+    localStorage.setItem("sabit_profile_name", displayName);
     this.triggerChange();
     return { user: this.currentUser };
   }

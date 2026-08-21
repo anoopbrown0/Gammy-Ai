@@ -13,7 +13,7 @@ interface HabitModalProps {
 
 const AVAILABLE_ICONS = [
   "Dumbbell", "BookOpen", "Brain", "Code", "Footprints", 
-  "Droplet", "Coins", "Languages", "Flame", "Heart", 
+  "Droplet", "Coins", "Languages", "Zap", "Heart", 
   "Music", "Brush", "Smile", "Compass", "Trophy", "Activity"
 ];
 
@@ -90,14 +90,12 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       setError("Please enter a habit name.");
       return;
     }
-    if (!goal.trim()) {
-      setError("Please enter a frequency or goal (e.g., 30 min/day).");
-      return;
-    }
+
+    const cleanGoal = goal.trim() || "1x / day";
 
     onSave({
       name: name.trim(),
-      goal: goal.trim(),
+      goal: cleanGoal,
       color: selectedColor,
       iconName: selectedIcon,
       category,

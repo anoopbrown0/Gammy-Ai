@@ -121,7 +121,7 @@ export const initialMetrics = (habitsCount: number): MetricCard[] => [
     trend: "Active",
     trendType: "neutral",
     color: "#F59E0B",
-    iconName: "Flame"
+    iconName: "Zap"
   },
   {
     id: "m5",

@@ -59,11 +59,43 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
     "You do not rise to the level of your goals. You fall to the level of your systems."
   ];
 
+const MOTIVATIONAL_SLIDES = [
+  {
+    url: "https://images.unsplash.com/photo-1470240731273-7821a6eeb6bd?auto=format&fit=crop&w=1200&q=80",
+    title: "Morning Momentum",
+    quote: "Rise early. Build momentum every morning."
+  },
+  {
+    url: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1200&q=80",
+    title: "Peak Discipline",
+    quote: "Consistency beats intensity every single day."
+  },
+  {
+    url: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",
+    title: "Deep Focus",
+    quote: "Small daily wins stack up into massive success."
+  },
+  {
+    url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80",
+    title: "Conquer Your Peak",
+    quote: "Master your habits, master your destiny."
+  },
+  {
+    url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+    title: "Unstoppable Drive",
+    quote: "Stay disciplined. Your future self will thank you."
+  }
+];
+
   const [isVideoHovered, setIsVideoHovered] = React.useState(false);
   const [tipIndex, setTipIndex] = React.useState(0);
   const [showTips, setShowTips] = React.useState(() => {
     return localStorage.getItem("sabit_show_tips") !== "false";
   });
+
+  // Automatic Motivational Slideshow
+  const [currentSlideIndex, setCurrentSlideIndex] = React.useState(0);
+  const [isSlideshowPaused, setIsSlideshowPaused] = React.useState(false);
 
   // Custom Media upload states & settings
   const [customMedia, setCustomMedia] = React.useState<string | null>(() => {
@@ -73,12 +105,21 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
     return (localStorage.getItem("sabit_custom_media_type") as "video" | "image" | null) || null;
   });
   const [customText, setCustomText] = React.useState<string>(() => {
-    return localStorage.getItem("sabit_custom_media_text") || "AI Coach Habit Session (Autoplay on Hover)";
+    return localStorage.getItem("sabit_custom_media_text") || "";
   });
   const [isCustomizing, setIsCustomizing] = React.useState(false);
   const [mediaUrlInput, setMediaUrlInput] = React.useState("");
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Slideshow auto-rotation timer
+  React.useEffect(() => {
+    if (isSlideshowPaused || customMedia) return;
+    const interval = setInterval(() => {
+      setCurrentSlideIndex((prev) => (prev + 1) % MOTIVATIONAL_SLIDES.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [isSlideshowPaused, customMedia]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,6 +154,13 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
     } else {
       localStorage.removeItem("sabit_custom_media");
     }
+
+    setIsCustomizing(false);
+    window.dispatchEvent(
+      new CustomEvent("sabit_trigger_toast", { 
+        detail: isVideo ? "Video added successfully!" : "Image added successfully!" 
+      })
+    );
   };
 
   const handleSaveUrl = () => {
@@ -128,16 +176,28 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
     localStorage.setItem("sabit_custom_media_type", type);
     setMediaUrlInput("");
     setIsCustomizing(false);
+
+    window.dispatchEvent(
+      new CustomEvent("sabit_trigger_toast", { 
+        detail: isVideo ? "Video link applied successfully!" : "Image link applied successfully!" 
+      })
+    );
   };
 
   const handleResetMedia = () => {
     setCustomMedia(null);
     setCustomMediaType(null);
-    setCustomText("AI Coach Habit Session (Autoplay on Hover)");
+    setCustomText("");
     localStorage.removeItem("sabit_custom_media");
     localStorage.removeItem("sabit_custom_media_type");
     localStorage.removeItem("sabit_custom_media_text");
     setIsCustomizing(false);
+
+    window.dispatchEvent(
+      new CustomEvent("sabit_trigger_toast", { 
+        detail: "Switched to automatic motivational slideshow!" 
+      })
+    );
   };
 
   React.useEffect(() => {
@@ -289,10 +349,13 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
     );
   };
 
-  // Glassmorphic Card theme classes
+  // iOS Grouped Card theme classes
   const cardBgClass = isDark
-    ? "bg-slate-900 hover:bg-slate-850 border-slate-800/90 shadow-[0_4px_20px_rgba(0,0,0,0.35)] text-white"
-    : "bg-white hover:bg-slate-50 border-slate-200/80 shadow-md text-slate-900";
+    ? "bg-[#1C1C1E] hover:bg-[#2C2C2E] border-white/10 shadow-sm text-white"
+    : "bg-white hover:bg-slate-50/80 border-slate-200/60 shadow-xs text-slate-900";
+
+  // Default slide image for Motivation Frame
+  const DEFAULT_MOTIVATION_IMAGE = "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&w=1200&q=80";
 
   return (
     <div 
@@ -301,100 +364,144 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
     >
       <div 
         id="sabit-metrics-grid"
-        className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 items-center"
+        className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 items-stretch"
       >
         {/* CARD 1: Success Analytic */}
         <div 
-          className={`col-span-1 md:col-span-1 rounded-2xl p-3 md:p-5 border hover:-translate-y-0.5 transition-all duration-300 flex flex-row md:flex-col justify-between items-center md:items-stretch h-[95px] md:h-[160px] group/card ${cardBgClass}`}
+          className={`col-span-1 rounded-2xl p-2.5 sm:p-4 md:p-5 border transition-all duration-300 flex flex-col justify-between min-h-[75px] sm:min-h-[140px] md:h-[160px] group/card ${cardBgClass}`}
         >
-          <div className="flex flex-col justify-center min-w-0">
-            <span className={`text-[9.5px] sm:text-[10px] md:text-[11px] font-extrabold uppercase tracking-wider leading-tight ${isDark ? "text-slate-200" : "text-slate-800"}`}>
-              <span className="block sm:inline">Success </span>
-              <span className="block sm:inline">Analytic</span>
-            </span>
-            <div className="flex flex-col gap-0.5 mt-1 md:mt-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 self-center" />
-                <span className={`text-[8.5px] md:text-[10px] font-bold ${isDark ? "text-slate-300" : "text-slate-500"}`}>Today:</span>
-                <span className={`text-[11px] md:text-sm font-black tracking-tight leading-none text-emerald-400`}>
-                  {todaySuccessRate}%
-                </span>
+          {/* Mobile view: Monthly Success Rate */}
+          <div className="flex sm:hidden flex-col justify-between h-full py-0.5 min-w-0">
+            <div className="flex items-center gap-1 min-w-0">
+              <div className={`p-1 rounded-md shrink-0 ${isDark ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/50" : "bg-emerald-50 text-emerald-600 border border-emerald-100"}`}>
+                <LucideIcon name="TrendingUp" size={11} strokeWidth={2.4} />
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 self-center" />
-                <span className={`text-[8.5px] md:text-[10px] font-bold ${isDark ? "text-slate-300" : "text-slate-500"}`}>Month:</span>
-                <span className={`text-[11px] md:text-sm font-black tracking-tight leading-none text-blue-400`}>
-                  {monthlySuccessRate}%
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="shrink-0 flex items-center justify-center md:mt-2">
-            <ConcentricProgress 
-              outerPct={monthlySuccessRate} 
-              innerPct={todaySuccessRate} 
-              outerColor="var(--sabit-primary)" 
-              innerColor="#10B981" 
-            />
-          </div>
-        </div>
-
-        {/* CARD 2: Monthly Achievement */}
-        <div 
-          className={`col-span-1 md:col-span-1 rounded-2xl p-3 md:p-5 border hover:-translate-y-0.5 transition-all duration-300 flex flex-row md:flex-col justify-between items-center md:items-stretch h-[95px] md:h-[160px] group/card ${cardBgClass}`}
-        >
-          <div className="flex flex-col justify-center min-w-0">
-            <span className={`text-[9.5px] sm:text-[10px] md:text-[11px] font-extrabold uppercase tracking-wider leading-tight ${isDark ? "text-slate-200" : "text-slate-800"}`}>
-              <span className="block sm:inline">Monthly </span>
-              <span className="block sm:inline">Achievement</span>
-            </span>
-            <div className="flex items-center gap-1.5 mt-1 md:mt-1.5">
-              <h3 className={`text-xs sm:text-sm md:text-xl font-black tracking-tight leading-none ${isDark ? "text-purple-300" : "text-purple-700"}`}>
-                {monthlyAchievement}%
-              </h3>
-              <span className={`text-[7.5px] md:text-[8.5px] font-extrabold px-1.5 py-0.5 rounded leading-none shrink-0 ${
-                isDark ? "text-indigo-300 bg-indigo-950/80 border border-indigo-800/50" : "text-indigo-600 bg-indigo-50"
-              }`}>
-                {activeHabitsCount} Active
+              <span className={`text-[9px] font-black uppercase tracking-wider truncate ${isDark ? "text-white" : "text-slate-950"}`}>
+                Success Analytic
               </span>
             </div>
-            <span className="hidden md:block text-[8px] text-slate-400 mt-1.5 font-medium">31-Day Activity Heatmap</span>
+            <div className="text-xl font-black tracking-tight text-emerald-600 dark:text-emerald-400 mt-1">
+              {monthlySuccessRate}%
+            </div>
+            <span className="text-[9px] text-slate-700 dark:text-slate-200 font-bold truncate">Monthly Rate</span>
           </div>
-          
-          {/* Mini 31-day contribution heat map grid */}
-          <div className="shrink-0 flex items-center justify-center md:mt-2">
-            <div className="grid grid-cols-7 gap-[1.5px] select-none p-1 rounded-md bg-slate-500/5 border border-slate-500/10">
-              {Array.from({ length: 31 }, (_, idx) => {
-                const cellColor = getCellColor(idx);
-                // Calculate completion rate of this day for tooltip
-                const dayCompleted = habits.filter(h => h.days[idx] === "completed").length;
-                const pct = habits.length > 0 ? Math.round((dayCompleted / habits.length) * 100) : 0;
-                return (
-                  <div
-                    key={idx}
-                    className={`w-[6px] h-[6px] sm:w-[7px] sm:h-[7px] md:w-2 md:h-2 rounded-[1.5px] border ${cellColor} transition-all duration-300 shrink-0 aspect-square`}
-                    title={`Day ${idx + 1}: ${pct}% completed`}
-                  />
-                );
-              })}
+
+          {/* Desktop view: Full breakdown focusing on full month */}
+          <div className="hidden sm:flex flex-col justify-between h-full min-w-0">
+            <div className="flex items-center justify-between gap-1 mb-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className={`p-1 rounded-md shrink-0 ${isDark ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/50" : "bg-emerald-50 text-emerald-600 border border-emerald-100"}`}>
+                  <LucideIcon name="TrendingUp" size={12} strokeWidth={2.4} />
+                </div>
+                <span className={`text-[11px] font-black uppercase tracking-wider truncate ${isDark ? "text-white" : "text-slate-950"}`}>
+                  Success Analytic
+                </span>
+              </div>
+              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none shrink-0 ${
+                isDark ? "text-emerald-300 bg-emerald-950/90 border border-emerald-700/60" : "text-emerald-800 bg-emerald-100 border border-emerald-300"
+              }`}>
+                Full Month
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-1.5 my-1">
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <div className="flex items-baseline gap-1">
+                  <h3 className={`text-2xl font-black tracking-tight leading-none ${isDark ? "text-emerald-400" : "text-emerald-600"}`}>
+                    {monthlySuccessRate}%
+                  </h3>
+                  <span className="text-[10px] text-slate-700 dark:text-slate-200 font-bold truncate">31-Day Rate</span>
+                </div>
+
+                <div className="flex items-center justify-between gap-1 text-[10px] font-bold text-slate-800 dark:text-slate-200">
+                  <span>{totalMonthCompleted} / {totalMonthPossible} ticks</span>
+                </div>
+              </div>
+
+              <div className="shrink-0 flex items-center justify-center pl-0.5">
+                <CircularProgress percentage={monthlySuccessRate} color="#10B981" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 text-[9px] text-slate-700 dark:text-slate-300 font-bold pt-1 border-t border-slate-500/20">
+              <LucideIcon name="Calendar" size={10} className="text-emerald-500" strokeWidth={2.4} />
+              <span>Full month completion index</span>
             </div>
           </div>
         </div>
 
-        {/* CARD 3: AI Coach Autoplay Video Session / Custom Media - Hidden on mobile view */}
+        {/* CARD 2: Today's Achievement */}
         <div 
-          onMouseEnter={() => setIsVideoHovered(true)}
-          onMouseLeave={() => setIsVideoHovered(false)}
-          onClick={() => {
-            if (!customMedia) {
-              setIsVideoHovered(!isVideoHovered);
-            }
-          }}
-          className={`hidden sm:block sm:col-span-2 rounded-2xl border transition-all duration-300 h-[145px] sm:h-[160px] relative overflow-hidden group/video cursor-pointer ${
+          className={`col-span-1 rounded-2xl p-2.5 sm:p-4 md:p-5 border transition-all duration-300 flex flex-col justify-between min-h-[75px] sm:min-h-[140px] md:h-[160px] group/card ${cardBgClass}`}
+        >
+          {/* Mobile view: Focus specifically on Today */}
+          <div className="flex sm:hidden flex-col justify-between h-full py-0.5 min-w-0">
+            <div className="flex items-center gap-1 min-w-0">
+              <div className={`p-1 rounded-md shrink-0 ${isDark ? "bg-purple-950/80 text-purple-300 border border-purple-800/50" : "bg-purple-50 text-purple-600 border border-purple-100"}`}>
+                <LucideIcon name="Award" size={11} strokeWidth={2.4} />
+              </div>
+              <span className={`text-[9px] font-black uppercase tracking-wider truncate ${isDark ? "text-white" : "text-slate-950"}`}>
+                Achievement
+              </span>
+            </div>
+            <div className="text-xl font-black tracking-tight text-purple-600 dark:text-purple-300 mt-1">
+              {todaySuccessRate}%
+            </div>
+            <span className="text-[9px] text-slate-700 dark:text-slate-200 font-bold truncate">Today's Focus</span>
+          </div>
+
+          {/* Desktop view: Focused specifically on Today's achievements */}
+          <div className="hidden sm:flex flex-col justify-between h-full min-w-0">
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-1 min-w-0">
+                  <div className={`p-1 rounded-md shrink-0 ${isDark ? "bg-purple-950/80 text-purple-300 border border-purple-800/50" : "bg-purple-50 text-purple-600 border border-purple-100"}`}>
+                    <LucideIcon name="Award" size={12} strokeWidth={2.4} />
+                  </div>
+                  <span className={`text-[11px] font-black uppercase tracking-wider truncate ${isDark ? "text-white" : "text-slate-950"}`}>
+                    Achievement
+                  </span>
+                </div>
+                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none shrink-0 ${
+                  isDark ? "text-purple-300 bg-purple-950/90 border border-purple-700/60" : "text-purple-800 bg-purple-100 border border-purple-300"
+                }`}>
+                  Today
+                </span>
+              </div>
+
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <h3 className={`text-2xl font-black tracking-tight leading-none ${isDark ? "text-purple-300" : "text-purple-700"}`}>
+                  {todaySuccessRate}%
+                </h3>
+                <span className="text-[10px] text-slate-700 dark:text-slate-200 font-bold truncate">{todayCompleted} of {habits.length} Done</span>
+              </div>
+            </div>
+
+            {/* Today's Achievement Progress Bar */}
+            <div className="mt-1.5 pt-1.5 border-t border-slate-500/20 flex flex-col gap-1">
+              <div className="flex items-center justify-between text-[9px] font-bold text-slate-800 dark:text-slate-200">
+                <span>Today's Target</span>
+                <span className="font-black text-purple-600 dark:text-purple-300">{todayCompleted}/{habits.length} Habits</span>
+              </div>
+              <div className="w-full bg-slate-300 dark:bg-slate-700 h-2 rounded-full overflow-hidden p-0.5">
+                <div 
+                  className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(0, todaySuccessRate))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CARD 3: Automatic Motivational Slideshow & Custom Media Section */}
+        <div 
+          onMouseEnter={() => setIsSlideshowPaused(true)}
+          onMouseLeave={() => setIsSlideshowPaused(false)}
+          className={`col-span-2 sm:col-span-2 rounded-2xl border transition-all duration-300 min-h-[140px] sm:h-[160px] relative overflow-hidden group/media cursor-pointer ${
             isDark 
               ? "bg-slate-900 border-slate-800/90 shadow-md" 
               : "bg-white border-slate-200 shadow-md"
-          } p-0`}
+          }`}
         >
           {/* Settings / Customize button */}
           <button
@@ -403,14 +510,14 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
               e.stopPropagation();
               setIsCustomizing(!isCustomizing);
             }}
-            className="absolute top-2.5 right-3 bg-slate-950/70 hover:bg-slate-950/90 backdrop-blur-sm p-1.5 rounded-lg border border-white/10 text-white z-20 transition-all active:scale-95 flex items-center justify-center cursor-pointer"
-            title="Customize Card Media & Text"
+            className="absolute top-2.5 right-3 bg-slate-950/70 hover:bg-slate-950/90 backdrop-blur-md p-1.5 rounded-xl border border-white/20 text-white z-20 transition-all active:scale-95 flex items-center justify-center cursor-pointer shadow-sm"
+            title="Customize Media & Slideshow"
           >
-            <LucideIcon name="Settings" size={12} />
+            <LucideIcon name="Settings" size={13} />
           </button>
 
-          {/* Video Frame with Custom Refs - Full Card Cover */}
-          <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-950 flex items-center justify-center group z-10">
+          {/* Media Frame */}
+          <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-950">
             {customMedia ? (
               customMediaType === "video" ? (
                 <video
@@ -419,68 +526,104 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
                   loop
                   muted
                   playsInline
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <img 
                   src={customMedia} 
                   alt="Custom Background"
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
               )
-            ) : isVideoHovered ? (
-              <iframe
-                src="https://www.youtube.com/embed/PZ7lDrwYdZc?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&modestbranding=1"
-                className="absolute inset-0 w-full h-full pointer-events-none scale-105"
-                title="YouTube AI Habit Session"
-                frameBorder="0"
-                allow="autoplay; encrypted-media"
-                allowFullScreen
-              />
             ) : (
-              <img 
-                src="https://img.youtube.com/vi/PZ7lDrwYdZc/mqdefault.jpg" 
-                alt="AI Habit Session Thumbnail"
-                className="w-full h-full object-cover opacity-85 group-hover/video:opacity-100 transition-all duration-300 transform scale-110 group-hover/video:scale-105"
-                referrerPolicy="no-referrer"
-              />
+              /* Automatic Motivational Slideshow */
+              MOTIVATIONAL_SLIDES.map((slide, idx) => (
+                <div
+                  key={idx}
+                  className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out ${
+                    idx === currentSlideIndex ? "opacity-100 scale-100" : "opacity-0 pointer-events-none scale-105"
+                  }`}
+                >
+                  <img 
+                    src={slide.url} 
+                    alt={slide.title}
+                    className="w-full h-full object-cover brightness-[0.8] transition-transform duration-7000 ease-out transform scale-105 group-hover/media:scale-110"
+                    referrerPolicy="no-referrer"
+                  />
+                  {/* Subtle vignette gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
+                </div>
+              ))
             )}
 
-            {/* Action/Text Overlay */}
-            <div className="absolute inset-0 bg-slate-950/20 group-hover/video:bg-transparent flex items-center justify-center transition-all pointer-events-none">
-              {!customMedia && !isVideoHovered && (
-                <div className="w-10 h-10 rounded-full bg-white/25 backdrop-blur-md flex items-center justify-center border border-white/35 group-hover/video:scale-110 transition-transform">
-                  <LucideIcon name="Play" size={14} className="text-white fill-white ml-0.5" />
+            {/* Content & Caption Overlay */}
+            <div className="absolute inset-0 flex flex-col justify-between p-4 pointer-events-none z-10 bg-gradient-to-t from-black/80 via-black/30 to-transparent">
+              {/* Top Tag */}
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-indigo-600/70 text-white border border-indigo-400/30 backdrop-blur-md shadow-xs">
+                  <LucideIcon name="Sparkles" size={11} className="text-indigo-200" />
+                  <span>
+                    {customMedia 
+                      ? (customMediaType === "video" ? "Custom Video" : "Custom Photo") 
+                      : MOTIVATIONAL_SLIDES[currentSlideIndex].title}
+                  </span>
+                </span>
+
+                {/* Slideshow progress indicators if default */}
+                {!customMedia && (
+                  <div className="flex items-center gap-1 mr-8">
+                    {MOTIVATIONAL_SLIDES.map((_, i) => (
+                      <div 
+                        key={i}
+                        className={`h-1 rounded-full transition-all duration-500 ${
+                          i === currentSlideIndex ? "w-4 bg-white" : "w-1 bg-white/40"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Headline & Action Arrow */}
+              <div className="flex items-end justify-between gap-3">
+                <div className="max-w-[80%]">
+                  <h3 className="text-sm sm:text-base md:text-lg font-black text-white tracking-tight leading-tight drop-shadow-xs">
+                    {customText || (!customMedia ? MOTIVATIONAL_SLIDES[currentSlideIndex].quote : "Personalized Motivation Frame")}
+                  </h3>
                 </div>
-              )}
-              <div className="absolute bottom-2.5 left-3 bg-slate-950/60 backdrop-blur-sm py-1 px-2.5 rounded-lg border border-white/10 flex items-center gap-1.5 text-[8.5px] sm:text-[9.5px] font-bold text-white tracking-wide">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{customText}</span>
+
+                {/* Right Arrow Action Circle */}
+                <div className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center shrink-0 transition-transform group-hover/media:scale-110 shadow-sm pointer-events-auto">
+                  <LucideIcon name="ArrowRight" size={15} strokeWidth={2.5} />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Customization Control Overlay Panel */}
+          {/* Clean Customization Panel Overlay */}
           {isCustomizing && (
             <div 
               onClick={(e) => e.stopPropagation()} 
-              className="absolute inset-0 bg-slate-900/95 dark:bg-slate-950/98 z-30 flex flex-col p-3 text-xs justify-between animate-fade-in text-white font-sans"
+              className="absolute inset-0 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md z-30 flex flex-col p-3.5 text-xs justify-between animate-fade-in text-white font-sans border border-blue-500/30 rounded-2xl"
             >
-              <div className="flex items-center justify-between border-b border-white/10 pb-1 flex-shrink-0">
-                <span className="font-extrabold text-[10px] uppercase tracking-wider text-blue-400">Customize Media & Text</span>
+              <div className="flex items-center justify-between border-b border-white/10 pb-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 text-blue-400 font-extrabold text-[11px] uppercase tracking-wider">
+                  <LucideIcon name="Image" size={13} />
+                  <span>Customize Media & Slideshow</span>
+                </div>
                 <button 
                   onClick={() => setIsCustomizing(false)}
-                  className="text-slate-400 hover:text-white p-0.5 rounded-md cursor-pointer"
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 >
-                  <LucideIcon name="X" size={12} />
+                  <LucideIcon name="X" size={14} />
                 </button>
               </div>
 
-              <div className="flex flex-col gap-1.5 my-1.5 min-w-0 overflow-y-auto custom-scrollbar flex-grow pr-1">
-                {/* Text Overlay input */}
+              <div className="flex flex-col gap-2 my-1 min-w-0 overflow-y-auto custom-scrollbar flex-grow pr-1">
+                {/* Custom Caption / Text Overlay input */}
                 <div>
-                  <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block mb-0.5">Text Overlay</label>
+                  <label className="text-[9px] font-extrabold text-slate-300 uppercase tracking-wider block mb-1">Custom Caption (Optional)</label>
                   <input
                     type="text"
                     value={customText}
@@ -488,46 +631,46 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
                       setCustomText(e.target.value);
                       localStorage.setItem("sabit_custom_media_text", e.target.value);
                     }}
-                    placeholder="Enter custom card overlay text"
-                    className="w-full text-[9px] bg-slate-800 border border-white/10 rounded-lg px-2 py-0.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    placeholder="e.g. My Vision Board 2026"
+                    className="w-full text-[10px] bg-slate-800/90 border border-white/15 rounded-xl px-2.5 py-1 text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
-                {/* Media options */}
-                <div className="grid grid-cols-2 gap-1.5">
+                {/* Upload Action buttons */}
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center justify-center gap-1 bg-blue-600 hover:bg-blue-500 active:scale-98 transition-all py-1 rounded-lg font-bold text-[9px] cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 active:scale-98 transition-all py-1.5 px-2 rounded-xl font-bold text-[10px] text-white shadow-sm cursor-pointer"
                   >
-                    <LucideIcon name="Upload" size={10} />
-                    <span>Upload File</span>
+                    <LucideIcon name="Upload" size={12} />
+                    <span>Upload Image/Video</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleResetMedia}
-                    className="flex items-center justify-center gap-1 bg-slate-800 hover:bg-slate-700 active:scale-98 transition-all py-1 rounded-lg font-bold text-[9px] border border-white/5 cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-700 active:scale-98 transition-all py-1.5 px-2 rounded-xl font-bold text-[10px] text-slate-200 border border-white/10 cursor-pointer"
                   >
-                    <LucideIcon name="RotateCcw" size={10} />
-                    <span>Reset Default</span>
+                    <LucideIcon name="Sparkles" size={12} className="text-amber-400" />
+                    <span>Auto Slideshow</span>
                   </button>
                 </div>
 
                 {/* Direct Link Input */}
                 <div>
-                  <label className="text-[8px] font-bold text-slate-400 uppercase tracking-wide block mb-0.5">Or Paste Direct Link (Video/Image)</label>
-                  <div className="flex gap-1">
+                  <label className="text-[9px] font-extrabold text-slate-300 uppercase tracking-wider block mb-1">Paste Direct Media URL</label>
+                  <div className="flex gap-1.5">
                     <input
                       type="text"
                       value={mediaUrlInput}
                       onChange={(e) => setMediaUrlInput(e.target.value)}
-                      placeholder="https://example.com/video.mp4"
-                      className="flex-1 text-[8px] bg-slate-800 border border-white/10 rounded-lg px-2 py-0.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      placeholder="https://images.unsplash.com/... or .mp4"
+                      className="flex-1 text-[9px] bg-slate-800/90 border border-white/15 rounded-xl px-2.5 py-1 text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
                     />
                     <button
                       type="button"
                       onClick={handleSaveUrl}
-                      className="bg-blue-600 hover:bg-blue-500 px-2 rounded-lg font-bold text-[8px] flex items-center justify-center cursor-pointer"
+                      className="bg-blue-600 hover:bg-blue-500 px-3 rounded-xl font-bold text-[10px] flex items-center justify-center cursor-pointer shadow-xs"
                     >
                       Apply
                     </button>
@@ -543,8 +686,8 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
                 className="hidden"
               />
 
-              <div className="text-[8px] text-slate-400 text-center flex-shrink-0">
-                Supports local MP4, WebM, PNG, JPG files or external links.
+              <div className="text-[9px] text-slate-400 text-center flex-shrink-0 pt-1 border-t border-white/10">
+                ✨ Uploading automatically updates your frame and shows a confirmation toast!
               </div>
             </div>
           )}

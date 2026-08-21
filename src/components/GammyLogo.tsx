@@ -5,10 +5,10 @@ interface GammyLogoProps {
   size?: number;
 }
 
-export const GammyLogo: React.FC<GammyLogoProps> = ({ className = "", size = 42 }) => {
+export const GammyLogo: React.FC<GammyLogoProps> = ({ className = "", size = 32 }) => {
   return (
     <div 
-      className={`relative flex items-center justify-center shrink-0 rounded-2xl overflow-hidden shadow-lg shadow-blue-600/30 group-hover:scale-105 transition-all duration-300 ring-1 ring-white/30 ${className}`}
+      className={`relative flex items-center justify-center shrink-0 rounded-xl overflow-hidden shadow-md shadow-blue-600/25 group-hover:scale-105 transition-all duration-300 ring-1 ring-white/30 ${className}`}
       style={{ width: size, height: size }}
     >
       <svg

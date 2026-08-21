@@ -213,6 +213,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({
 // ACCOUNT VIEW: Anoop's Profile & Personalized Success Hub
 interface AccountViewProps {
   isDark: boolean;
+  setIsDark: (dark: boolean) => void;
   theme: "light" | "dark" | "system";
   setTheme: (theme: "light" | "dark" | "system") => void;
   colorTheme: string;
@@ -223,6 +224,7 @@ interface AccountViewProps {
 
 export const AccountView: React.FC<AccountViewProps> = ({
   isDark,
+  setIsDark,
   theme,
   setTheme,
   colorTheme,
@@ -231,26 +233,14 @@ export const AccountView: React.FC<AccountViewProps> = ({
   triggerToast,
 }) => {
   const [userName, setUserName] = useState(() => {
-    return localStorage.getItem("sabit_profile_name") || "Anoop Brown";
+    return localStorage.getItem("sabit_profile_name") || "User";
   });
   const [userEmail, setUserEmail] = useState(() => {
-    const stored = localStorage.getItem("sabit_profile_email");
-    if (stored) return stored;
-    return localStorage.getItem("sabit_profile_name") === "Anup Sharma" ? "anup.sharma@sabit.ai" : "anoopbrown0@gmail.com";
+    return localStorage.getItem("sabit_profile_email") || "user@gammy.app";
   });
-  const [profileLocation, setProfileLocation] = useState(() => {
-    return localStorage.getItem("sabit_profile_location") || "Gurgaon, India";
-  });
-  const [profileBio, setProfileBio] = useState(() => {
-    return localStorage.getItem("sabit_profile_bio") || "High-performance individual cultivating daily consistency, resilience, and laser-focused attention to craft long-term positive routines.";
-  });
-  const [personalMission, setPersonalMission] = useState(
-    "Build unstoppable physical & mental momentum through small deliberate daily choices."
-  );
-  const [mindsetFocus, setMindsetFocus] = useState("discipline");
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -272,7 +262,6 @@ export const AccountView: React.FC<AccountViewProps> = ({
       const customEvent = e as CustomEvent;
       if (customEvent.detail) {
         setUserName(customEvent.detail);
-        setUserEmail(customEvent.detail === "Anoop Brown" ? "anoopbrown0@gmail.com" : "anup.sharma@sabit.ai");
       }
     };
     window.addEventListener("sabit_profile_changed", handleProfileChange);
@@ -288,8 +277,8 @@ export const AccountView: React.FC<AccountViewProps> = ({
       triggerToast("Please select a valid image file.");
       return;
     }
-    if (file.size > 1.5 * 1024 * 1024) {
-      triggerToast("Image should be smaller than 1.5MB for local storage.");
+    if (file.size > 2 * 1024 * 1024) {
+      triggerToast("Image should be smaller than 2MB.");
       return;
     }
 
@@ -301,9 +290,9 @@ export const AccountView: React.FC<AccountViewProps> = ({
         localStorage.setItem("sabit_banner_image", base64);
         window.dispatchEvent(new Event("sabit_profile_image_updated"));
         window.dispatchEvent(new CustomEvent("sabit_profile_changed", { detail: userName }));
-        triggerToast("Profile picture updated successfully!");
+        triggerToast("Profile picture updated.");
       } catch (err) {
-        triggerToast("Could not save image: local storage quota exceeded.");
+        triggerToast("Could not save image: storage limit reached.");
       }
     };
     reader.readAsDataURL(file);
@@ -322,55 +311,76 @@ export const AccountView: React.FC<AccountViewProps> = ({
       localStorage.removeItem("sabit_banner_image");
       window.dispatchEvent(new Event("sabit_profile_image_updated"));
       window.dispatchEvent(new CustomEvent("sabit_profile_changed", { detail: userName }));
-      triggerToast("Profile picture reset to default initials.");
+      triggerToast("Profile picture removed.");
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const saveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsDragging(true);
-  };
+    if (!userName.trim()) return;
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files[0]);
-    }
-  };
-
-  const saveProfile = () => {
-    setIsEditing(false);
-    localStorage.setItem("sabit_profile_name", userName);
-    localStorage.setItem("sabit_profile_email", userEmail);
-    localStorage.setItem("sabit_profile_location", profileLocation);
-    localStorage.setItem("sabit_profile_bio", profileBio);
+    setIsSaving(true);
+    localStorage.setItem("sabit_profile_name", userName.trim());
+    localStorage.setItem("sabit_profile_email", userEmail.trim());
     
-    // Dispatch custom events to update rest of application instantly
-    window.dispatchEvent(new CustomEvent("sabit_profile_changed", { detail: userName }));
-    triggerToast("Identity profile settings saved successfully!");
+    window.dispatchEvent(new CustomEvent("sabit_profile_changed", { detail: userName.trim() }));
+    
+    setTimeout(() => {
+      setIsSaving(false);
+      triggerToast("Profile saved successfully.");
+    }, 200);
   };
 
-  const currentFirstLetter = userName ? userName.charAt(0).toUpperCase() : "A";
+  const handleResetHabits = () => {
+    window.dispatchEvent(new CustomEvent("sabit_reset_progress"));
+    setShowConfirmReset(false);
+    triggerToast("All habit progress has been reset.");
+  };
+
+  const currentFirstLetter = userName ? userName.charAt(0).toUpperCase() : "U";
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header Profile Summary banner */}
-      <div className={`p-5 md:p-6 rounded-2xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
-        isDark 
-          ? "bg-slate-900 border-slate-800" 
-          : "bg-white border-slate-200 shadow-xs"
-      }`}>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <div className={`w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center text-white font-black text-lg shadow-sm border-2 ${
-              isDark ? "border-slate-800 bg-slate-800" : "border-slate-100 bg-[#2563EB]"
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-12">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+        <div>
+          <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+            Account & Settings
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Manage your personal profile, appearance, and habit tracking preferences.
+          </p>
+        </div>
+        <button
+          onClick={onReturn}
+          className={`self-start sm:self-center px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all cursor-pointer ${
+            isDark 
+              ? "bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800" 
+              : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs"
+          }`}
+        >
+          <LucideIcon name="ArrowLeft" size={14} />
+          <span>Back to Tracker</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        
+        {/* Left Column: Profile Card */}
+        <div className={`md:col-span-7 p-6 rounded-2xl border ${
+          isDark ? "bg-slate-900/90 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900 shadow-xs"
+        }`}>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-5 flex items-center gap-2">
+            <LucideIcon name="User" size={16} className="text-[#007AFF]" />
+            <span>Profile Information</span>
+          </h2>
+
+          {/* Avatar Section */}
+          <div className="flex items-center gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
+            <div className={`w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-sm border ${
+              isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-[#007AFF]"
             }`}>
               {profileImage ? (
                 <img src={profileImage} alt={userName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -378,178 +388,169 @@ export const AccountView: React.FC<AccountViewProps> = ({
                 currentFirstLetter
               )}
             </div>
-            <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center">
-              <LucideIcon name="Check" size={8} className="text-white" />
-            </span>
-          </div>
-          <div>
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-600 dark:text-blue-400">
-              User Settings
-            </span>
-            <h1 className={`text-base font-bold tracking-tight ${isDark ? "text-white" : "text-[#0F172A]"}`}>
-              {userName}
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Manage profile information, theme options, and daily habit goals
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={onReturn}
-          className="text-xs font-bold px-4 py-2 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xs cursor-pointer transition-transform active:scale-95"
-        >
-          Back to Dashboard
-        </button>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Profile Card Form */}
-        <div className={`lg:col-span-7 p-6 rounded-2xl border space-y-6 ${
-          isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100 shadow-sm"
-        }`}>
-          
-          {/* Section: Image upload & Management */}
-          <div className="space-y-3">
-            <h4 className={`text-[10px] font-extrabold uppercase tracking-widest ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              Profile Picture Management
-            </h4>
-            <div 
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`p-5 rounded-2xl border-2 border-dashed flex flex-col sm:flex-row items-center gap-4 transition-all ${
-                isDragging 
-                  ? "border-[#2563EB] bg-[#2563EB]/5 scale-[1.01]" 
-                  : isDark ? "border-slate-800 hover:border-slate-700 bg-slate-950/25" : "border-slate-200 hover:border-slate-300 bg-slate-50/40"
-              }`}
-            >
-              <div className="relative group select-none cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
-                <div className={`w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center text-white font-black text-xl shadow-md border ${
-                  isDark ? "border-slate-800 bg-slate-800" : "border-slate-200 bg-[#7C3AED]"
-                }`}>
-                  {profileImage ? (
-                    <img src={profileImage} alt={userName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    currentFirstLetter
-                  )}
-                </div>
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity flex flex-col items-center justify-center text-[8px] font-bold text-white">
-                  <LucideIcon name="Camera" size={14} />
-                  <span>UPLOAD</span>
-                </div>
-              </div>
-
-              <div className="flex-1 text-center sm:text-left">
-                <p className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-[#0F172A]"}`}>
-                  Drag & Drop avatar photo here
-                </p>
-                <p className="text-[10px] text-slate-400 mt-1 leading-normal">
-                  Supports JPEG, PNG or WebP formats. Max file size: 1.5MB to maintain perfect offline state velocity.
-                </p>
-                <div className="mt-3 flex flex-wrap justify-center sm:justify-start gap-2">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 bg-[#007AFF] hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  Change Photo
+                </button>
+                {profileImage && (
                   <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[10px] font-bold px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer"
-                  >
-                    Select Local File
-                  </button>
-                  {profileImage && (
-                    <button
-                      onClick={handleResetAvatar}
-                      className={`text-[10px] font-bold px-3.5 py-1.5 rounded-lg border transition-colors cursor-pointer ${
-                        isDark 
-                          ? "bg-slate-850 border-slate-750 text-red-400 hover:bg-slate-800" 
-                          : "bg-white border-slate-200 text-red-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      Reset Photo
-                    </button>
-                  )}
-                </div>
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange} 
-                  accept="image/*" 
-                  className="hidden" 
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className={`border-t ${isDark ? "border-slate-800" : "border-slate-100"}`}></div>
-
-          {/* Section: Theme selection */}
-          <div className="space-y-4">
-            <div>
-              <h4 className={`text-[10px] font-extrabold uppercase tracking-widest ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                Theme Customization
-              </h4>
-              <p className="text-[9px] text-slate-400 mt-0.5">Control the ambient visual lightness of the workspace.</p>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { id: "light", label: "Light Mode", icon: "Sun", color: "text-amber-500" },
-                { id: "dark", label: "Dark Mode", icon: "Moon", color: "text-blue-400" },
-                { id: "system", label: "System Theme", icon: "Monitor", color: "text-purple-500" },
-              ].map((item) => {
-                const isSelected = theme === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setTheme(item.id as "light" | "dark" | "system");
-                      triggerToast(`Switched theme workspace configuration to ${item.label}!`);
-                    }}
-                    className={`p-3.5 rounded-xl border flex flex-col items-center justify-center text-center gap-2 transition-all cursor-pointer ${
-                      isSelected
-                        ? "border-[#2563EB] bg-[#2563EB]/5 text-[#2563EB] font-black scale-101 shadow-sm"
-                        : isDark
-                          ? "border-slate-800 hover:border-slate-700 bg-slate-950/10 text-slate-300"
-                          : "border-slate-200 hover:border-slate-300 bg-white text-slate-700 shadow-2xs"
+                    type="button"
+                    onClick={handleResetAvatar}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                      isDark ? "border-slate-700 text-slate-300 hover:bg-slate-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    <LucideIcon name={item.icon} size={16} className={isSelected ? "animate-pulse" : item.color} />
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider">{item.label}</span>
+                    Remove
                   </button>
-                );
-              })}
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                JPG, PNG or WebP under 2MB.
+              </p>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                accept="image/*" 
+                className="hidden" 
+              />
+            </div>
+          </div>
+
+          {/* Profile Form */}
+          <form onSubmit={saveProfile} className="space-y-4 pt-6">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                placeholder="Enter your name"
+                required
+                className={`w-full px-3.5 py-2.5 rounded-xl text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                  isDark 
+                    ? "bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500" 
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                }`}
+              />
             </div>
 
-            {/* Dynamic Accent Color Theme Selector */}
-            <div className="pt-2">
-              <label className={`text-[10px] font-extrabold uppercase tracking-widest block mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                Workspace Accent Color Theme
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                Email Address
               </label>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              <input
+                type="email"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+                placeholder="Enter your email"
+                className={`w-full px-3.5 py-2.5 rounded-xl text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
+                  isDark 
+                    ? "bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500" 
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
+                }`}
+              />
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="px-5 py-2.5 bg-[#007AFF] hover:bg-blue-600 active:scale-98 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Right Column: Theme & Workspace Settings */}
+        <div className="md:col-span-5 space-y-6">
+          
+          {/* Appearance Card */}
+          <div className={`p-6 rounded-2xl border ${
+            isDark ? "bg-slate-900/90 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900 shadow-xs"
+          }`}>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2">
+              <LucideIcon name="Palette" size={16} className="text-purple-500" />
+              <span>Appearance</span>
+            </h2>
+
+            {/* Theme Toggle */}
+            <div className="space-y-2 mb-5">
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Interface Mode
+              </label>
+              <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: "blue", label: "Blue", hex: "#2563EB", bg: "bg-blue-600" },
-                  { id: "purple", label: "Purple", hex: "#7C3AED", bg: "bg-purple-600" },
-                  { id: "emerald", label: "Emerald", hex: "#10B981", bg: "bg-emerald-600" },
-                  { id: "rose", label: "Rose", hex: "#F43F5E", bg: "bg-rose-600" },
-                  { id: "amber", label: "Amber", hex: "#D97706", bg: "bg-amber-600" },
-                  { id: "indigo", label: "Indigo", hex: "#4F46E5", bg: "bg-indigo-600" },
-                ].map((color) => {
-                  const isSelected = colorTheme === color.id;
+                  { id: "light", label: "Bright / Light", icon: "Sun" },
+                  { id: "dark", label: "Dark Mode", icon: "Moon" },
+                ].map((item) => {
+                  const isSelected = item.id === "dark" ? isDark : !isDark;
                   return (
                     <button
-                      key={color.id}
+                      key={item.id}
                       type="button"
                       onClick={() => {
-                        setColorTheme(color.id);
-                        triggerToast(`Switched workspace accent palette to ${color.label}!`);
+                        const wantDark = item.id === "dark";
+                        setTheme(item.id as "light" | "dark");
+                        setIsDark(wantDark);
+                        triggerToast(`Switched to ${item.id === "dark" ? "Dark Mode" : "Bright Mode"}.`);
                       }}
-                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                      className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-semibold transition-all cursor-pointer ${
                         isSelected
-                          ? "border-[#2563EB] bg-[#2563EB]/5 font-extrabold scale-102"
+                          ? "bg-[#007AFF] text-white border-[#007AFF] shadow-sm"
                           : isDark
-                            ? "border-slate-800 hover:border-slate-700 bg-slate-950/10"
-                            : "border-slate-200 hover:border-slate-300 bg-white"
+                            ? "bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                       }`}
                     >
-                      <span className={`w-3 h-3 rounded-full ${color.bg} shadow-xs shrink-0 block`} />
-                      <span className="text-[9px] font-bold uppercase tracking-wider">{color.label}</span>
+                      <LucideIcon name={item.icon} size={15} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Accent Colors */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Accent Color
+              </label>
+              <div className="grid grid-cols-6 gap-2">
+                {[
+                  { id: "blue", hex: "#2563EB", bg: "bg-blue-600" },
+                  { id: "purple", hex: "#7C3AED", bg: "bg-purple-600" },
+                  { id: "emerald", hex: "#10B981", bg: "bg-emerald-600" },
+                  { id: "rose", hex: "#F43F5E", bg: "bg-rose-600" },
+                  { id: "amber", hex: "#D97706", bg: "bg-amber-600" },
+                  { id: "indigo", hex: "#4F46E5", bg: "bg-indigo-600" },
+                ].map((c) => {
+                  const isSelected = colorTheme === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setColorTheme(c.id);
+                        triggerToast(`Accent color updated.`);
+                      }}
+                      className={`h-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                        isSelected 
+                          ? "ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900 border-transparent" 
+                          : isDark ? "border-slate-800 hover:border-slate-700" : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded-full ${c.bg} shadow-xs`} />
                     </button>
                   );
                 })}
@@ -557,223 +558,65 @@ export const AccountView: React.FC<AccountViewProps> = ({
             </div>
           </div>
 
-          <div className={`border-t ${isDark ? "border-slate-800" : "border-slate-100"}`}></div>
-
-          {/* Section: Text details */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className={`text-[10px] font-extrabold uppercase tracking-widest ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                Identity Details
-              </h4>
-              {isEditing ? (
-                <button
-                  onClick={saveProfile}
-                  className="text-[10px] font-extrabold text-emerald-500 hover:text-emerald-600 transition-colors uppercase tracking-wider cursor-pointer"
-                >
-                  Save Profile Details
-                </button>
-              ) : (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="text-[10px] font-extrabold text-blue-500 hover:text-blue-600 transition-colors uppercase tracking-wider cursor-pointer"
-                >
-                  Edit Details
-                </button>
-              )}
-            </div>
+          {/* Account Data & Safety Card */}
+          <div className={`p-6 rounded-2xl border ${
+            isDark ? "bg-slate-900/90 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900 shadow-xs"
+          }`}>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2">
+              <LucideIcon name="Shield" size={16} className="text-emerald-500" />
+              <span>Data & Management</span>
+            </h2>
 
             <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Display Name
-                  </label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={userName}
-                      onChange={(e) => setUserName(e.target.value)}
-                      className={`w-full text-xs p-2.5 rounded-xl border ${
-                        isDark ? "bg-slate-850 border-slate-800 text-white focus:border-blue-500" : "bg-slate-50 border-slate-200 text-[#0F172A] focus:border-blue-500"
-                      }`}
-                    />
-                  ) : (
-                    <p className={`text-xs font-semibold p-2.5 rounded-xl border ${isDark ? "bg-slate-850/30 border-transparent text-slate-100" : "bg-slate-50/50 border-transparent text-[#0F172A]"}`}>
-                      {userName}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Secured Email
-                  </label>
-                  {isEditing ? (
-                    <input
-                      type="email"
-                      value={userEmail}
-                      onChange={(e) => setUserEmail(e.target.value)}
-                      className={`w-full text-xs p-2.5 rounded-xl border ${
-                        isDark ? "bg-slate-850 border-slate-800 text-white focus:border-blue-500" : "bg-slate-50 border-slate-200 text-[#0F172A] focus:border-blue-500"
-                      }`}
-                    />
-                  ) : (
-                    <p className={`text-xs font-semibold p-2.5 rounded-xl border ${isDark ? "bg-slate-850/30 border-transparent text-slate-100" : "bg-slate-50/50 border-transparent text-[#0F172A]"}`}>
-                      {userEmail}
-                    </p>
-                  )}
+              <div className={`p-3 rounded-xl border flex items-center gap-3 ${
+                isDark ? "bg-slate-800/40 border-slate-700/60" : "bg-slate-50 border-slate-200/80"
+              }`}>
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold">Cloud Sync Active</p>
+                  <p className="text-[11px] text-slate-400 truncate">Habit ledger saved securely.</p>
                 </div>
               </div>
 
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Location (Extended Info)
-                </label>
-                {isEditing ? (
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                      <LucideIcon name="MapPin" size={13} />
-                    </span>
-                    <input
-                      type="text"
-                      value={profileLocation}
-                      onChange={(e) => setProfileLocation(e.target.value)}
-                      placeholder="e.g. Gurgaon, India"
-                      className={`w-full text-xs py-2.5 pl-9 pr-3 rounded-xl border ${
-                        isDark ? "bg-slate-850 border-slate-800 text-white focus:border-blue-500" : "bg-slate-50 border-slate-200 text-[#0F172A] focus:border-blue-500"
-                      }`}
-                    />
-                  </div>
-                ) : (
-                  <p className={`text-xs font-semibold p-2.5 rounded-xl border flex items-center gap-2 ${isDark ? "bg-slate-850/30 border-transparent text-slate-100" : "bg-slate-50/50 border-transparent text-[#0F172A]"}`}>
-                    <LucideIcon name="MapPin" size={13} className="text-red-400" />
-                    <span>{profileLocation}</span>
+              {!showConfirmReset ? (
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmReset(true)}
+                  className={`w-full py-2.5 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    isDark 
+                      ? "border-slate-800 text-rose-400 hover:bg-rose-950/20" 
+                      : "border-slate-200 text-rose-600 hover:bg-rose-50"
+                  }`}
+                >
+                  <LucideIcon name="RotateCcw" size={14} />
+                  <span>Reset All Habit Progress</span>
+                </button>
+              ) : (
+                <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 space-y-2">
+                  <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
+                    Are you sure you want to reset all checkboxes to default?
                   </p>
-                )}
-              </div>
-
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Mindset Primary Focus
-                </label>
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                  {[
-                    { id: "discipline", label: "Pure Discipline", icon: "CheckSquare", color: "text-[#2563EB]" },
-                    { id: "health", label: "Peak Vitality", icon: "Dumbbell", color: "text-rose-500" },
-                    { id: "leisure", label: "Zen Calmness", icon: "Brain", color: "text-cyan-500" },
-                  ].map((item) => (
+                  <div className="flex items-center gap-2">
                     <button
-                      key={item.id}
                       type="button"
-                      disabled={!isEditing}
-                      onClick={() => setMindsetFocus(item.id)}
-                      className={`p-2.5 rounded-xl border text-[10px] font-bold flex flex-col items-center gap-1.5 transition-all ${
-                        mindsetFocus === item.id
-                          ? isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-slate-50 border-slate-300 text-[#0F172A]"
-                          : "opacity-60 hover:opacity-100 disabled:opacity-50"
-                      }`}
+                      onClick={handleResetHabits}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors"
                     >
-                      <LucideIcon name={item.icon} size={14} className={item.color} />
-                      <span>{item.label}</span>
+                      Yes, Reset
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Professional Bio (Extended Info)
-                </label>
-                {isEditing ? (
-                  <textarea
-                    value={profileBio}
-                    rows={3}
-                    onChange={(e) => setProfileBio(e.target.value)}
-                    placeholder="Enter a brief description of your goals or active focus"
-                    className={`w-full text-xs p-2.5 rounded-xl border resize-none ${
-                      isDark ? "bg-slate-850 border-slate-800 text-white focus:border-blue-500" : "bg-slate-50 border-slate-200 text-[#0F172A] focus:border-blue-500"
-                    }`}
-                  />
-                ) : (
-                  <p className={`text-xs leading-relaxed p-3 rounded-xl border font-medium ${isDark ? "bg-slate-850/30 border-transparent text-slate-300" : "bg-slate-50/50 border-transparent text-slate-600"}`}>
-                    {profileBio}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Vision & Goals Side column */}
-        <div className="lg:col-span-5 space-y-4">
-          
-          {/* Section: Performance Summary Card */}
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-600 to-slate-900 text-white space-y-3 relative overflow-hidden shadow-sm">
-            <div className="relative z-10 space-y-2">
-              <span className="text-[9px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-white/15 inline-block">
-                Consistency Summary
-              </span>
-              <h3 className="text-sm font-bold tracking-tight">
-                {userName.split(" ")[0]}'s Progress Status
-              </h3>
-              <p className="text-xs text-blue-100 leading-relaxed font-medium">
-                You are maintaining an excellent habit completion rate this month. Stay consistent with your daily routines!
-              </p>
-              <div className="pt-1 flex items-center gap-1.5 text-xs font-bold text-amber-300">
-                <LucideIcon name="Award" size={14} className="text-amber-400" />
-                <span>Tier 1 Active Tracker</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Section: Personal Mission Statement */}
-          <div className={`p-5 rounded-2xl border space-y-3 ${
-            isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100 shadow-sm"
-          }`}>
-            <h4 className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-slate-300" : "text-[#0F172A]"}`}>
-              Personal Vision Statement
-            </h4>
-            {isEditing ? (
-              <textarea
-                value={personalMission}
-                rows={3}
-                onChange={(e) => setPersonalMission(e.target.value)}
-                className={`w-full text-xs p-2.5 rounded-xl border resize-none ${
-                  isDark ? "bg-slate-850 border-slate-800 text-white" : "bg-slate-50 border-slate-200 text-[#0F172A]"
-                }`}
-              />
-            ) : (
-              <p className={`text-xs leading-relaxed italic p-3 rounded-xl border font-medium ${isDark ? "bg-slate-850/50 border-transparent text-slate-300" : "bg-slate-50 border-transparent text-slate-600"}`}>
-                "{personalMission}"
-              </p>
-            )}
-          </div>
-
-          {/* Vision Milestones */}
-          <div className={`p-5 rounded-2xl border space-y-3 ${
-            isDark ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100 shadow-sm"
-          }`}>
-            <h4 className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-slate-300" : "text-[#0F172A]"}`}>
-              Personal Vision Milestones
-            </h4>
-            <div className="space-y-2.5">
-              {[
-                { label: "Complete 100 days of Sabit ledger tracking", status: "76% Completed", progress: 76, color: "bg-[#2563EB]" },
-                { label: "Fulfill daily workout & active routines week", status: "Completed!", progress: 100, color: "bg-emerald-500" },
-                { label: "Maintain perfect zen meditation streak", status: "Pending July", progress: 40, color: "bg-cyan-500" },
-              ].map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex justify-between items-center text-[10px] font-semibold">
-                    <span className={isDark ? "text-slate-300" : "text-slate-700"}>{item.label}</span>
-                    <span className="font-mono text-slate-400">{item.status}</span>
-                  </div>
-                  <div className={`w-full h-1.5 rounded-full ${isDark ? "bg-slate-800" : "bg-slate-50"}`}>
-                    <div className={`h-full rounded-full transition-all duration-300 ${item.color}`} style={{ width: `${item.progress}%` }} />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmReset(false)}
+                      className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg cursor-pointer hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -785,12 +628,14 @@ export const AccountView: React.FC<AccountViewProps> = ({
 interface SignOutViewProps {
   isDark: boolean;
   onSignIn: () => void;
+  onGoToLanding?: () => void;
   triggerToast: (msg: string) => void;
 }
 
 export const SignOutView: React.FC<SignOutViewProps> = ({
   isDark,
   onSignIn,
+  onGoToLanding,
   triggerToast,
 }) => {
   const [sliderVal, setSliderVal] = useState(0);
@@ -827,69 +672,52 @@ export const SignOutView: React.FC<SignOutViewProps> = ({
       <div className={`w-full p-8 rounded-3xl border shadow-xl space-y-6 ${
         isDark ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-100 text-slate-900"
       }`}>
-        <div className="inline-flex p-4 rounded-full bg-rose-50 text-rose-500 shadow-sm border border-rose-100">
-          <LucideIcon name="ShieldAlert" size={36} className="animate-pulse" />
+        <div className="inline-flex p-4 rounded-full bg-blue-500/10 text-blue-600 shadow-sm border border-blue-500/20">
+          <LucideIcon name="Sparkles" size={36} className="animate-pulse" />
         </div>
         
         <div>
           <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#64748B] block">
-            Sabit Ledger Authentication
+            Gammy AI Habit Tracker
           </span>
           <h2 className={`text-base font-black tracking-tight mt-1 ${isDark ? "text-white" : "text-[#0F172A]"}`}>
-            Securely Logged Out
+            Signed Out
           </h2>
           <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-            {firstName}, your habit sessions have been saved safely in local encryption. Swipe the slider to authorize and log back in instantly.
+            {firstName}, your habit ledger is saved in secure cloud persistence. Return to the Gammy home website or sign back in anytime.
           </p>
         </div>
 
-        {/* Swipe lock indicator */}
-        <div className={`p-4 rounded-2xl border relative flex items-center justify-center overflow-hidden ${
-          isDark ? "bg-slate-950 border-slate-800" : "bg-slate-50 border-slate-200"
-        }`}>
-          {/* Progress fill */}
-          <div 
-            className="absolute left-0 top-0 bottom-0 bg-blue-500/10 transition-all pointer-events-none" 
-            style={{ width: `${sliderVal}%` }}
-          />
-
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={sliderVal}
-            onChange={handleSliderChange}
-            onMouseUp={() => { if (sliderVal < 90) setSliderVal(0); }}
-            onTouchEnd={() => { if (sliderVal < 90) setSliderVal(0); }}
-            className="w-full h-10 cursor-pointer accent-[#2563EB] opacity-90 relative z-10"
-          />
-
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[10px] font-extrabold uppercase tracking-widest text-[#2563EB] select-none">
-            {sliderVal >= 90 ? "Success!" : sliderVal > 10 ? "Swiping..." : "Swipe to Log In"}
-          </div>
-        </div>
+        {onGoToLanding && (
+          <button
+            onClick={onGoToLanding}
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <LucideIcon name="Home" size={15} />
+            <span>Go to Gammy Home Page</span>
+          </button>
+        )}
 
         <button
           onClick={onSignIn}
-          className="w-full py-3 bg-gradient-to-r from-[#2563EB] to-[#7C3AED] hover:from-[#1D4ED8] hover:to-[#6D28D9] text-white text-[11px] font-bold rounded-xl shadow-md transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+          className={`w-full py-3 border text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 ${
+            isDark ? "bg-slate-800 border-slate-700 text-white hover:bg-slate-750" : "bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100"
+          }`}
         >
-          {/* Custom clean Google icon */}
-          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-            <path d="M12.24 10.285V13.4h6.887C18.2 15.614 15.645 18 12.24 18c-3.86 0-7-3.14-7-7s3.14-7 7-7c1.71 0 3.28.625 4.505 1.664l2.42-2.42C17.39 1.614 14.935 1 12.24 1 6.64 1 2 5.64 2 11.24s4.64 10.24 10.24 10.24c5.795 0 10.254-4.074 10.254-10.24 0-.695-.08-1.355-.22-1.955H12.24z"/>
-          </svg>
-          <span>Connect with Google Account</span>
+          <LucideIcon name="Mail" size={15} />
+          <span>Sign In / Register</span>
         </button>
 
         <button
           onClick={() => {
-            triggerToast("Guest session restored instantly!");
+            triggerToast("Guest workspace restored!");
             onSignIn(); // fallback guest sign in
           }}
-          className={`w-full py-2.5 border text-[10px] font-bold rounded-xl transition-all cursor-pointer ${
-            isDark ? "bg-slate-800 border-slate-750 text-slate-300 hover:bg-slate-700" : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+          className={`w-full py-2.5 border text-[10px] font-semibold rounded-xl transition-all cursor-pointer ${
+            isDark ? "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
           }`}
         >
-          Continue as Guest ({firstName})
+          Explore Workspace as Guest ({firstName})
         </button>
       </div>
     </div>

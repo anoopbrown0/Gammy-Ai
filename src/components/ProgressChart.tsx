@@ -128,7 +128,7 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
   const uniqueId = useId().replace(/:/g, "");
   const [dimensions, setDimensions] = useState(() => ({
     width: 500,
-    height: typeof window !== "undefined" && window.innerWidth < 640 ? 135 : 220,
+    height: typeof window !== "undefined" && window.innerWidth < 640 ? 195 : 230,
   }));
 
   // Calculate today's completed habits count
@@ -136,23 +136,6 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
   const completedToday = habits.filter(h => h.days && h.days[todayIdx] === "completed").length;
   const totalHabits = habits.length;
 
-  // Motivational quote list with changeable icon
-  const MOTIVATIONAL_QUOTES = [
-    "Consistency turns small actions into extraordinary results.",
-    "Every habit checked off brings you closer to your ultimate goal. Keep pushing!",
-    "Excellence is not a single act, but a daily habit. Stay committed!",
-    "Small daily wins compound into extraordinary long-term achievements.",
-    "Discipline is choosing between what you want now and what you want most.",
-    "Consistency is the master key that unlocks your full potential.",
-    "Success is built silently every single day. Keep building!",
-    "You are writing your story one checkmark at a time. Finish strong!"
-  ];
-
-  const [quoteIndex, setQuoteIndex] = useState(0);
-
-  const handleNextQuote = () => {
-    setQuoteIndex((prev) => (prev + 1) % MOTIVATIONAL_QUOTES.length);
-  };
 
   // Dynamic calculations based on habits
   const getDayCompletionRate = (dayIdx: number, habitId: string): number => {
@@ -200,8 +183,8 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
         const { width } = entry.contentRect;
         const isMobile = window.innerWidth < 640;
         setDimensions({
-          width: Math.max(width, 280),
-          height: isMobile ? 165 : 220,
+          width: Math.max(width, 260),
+          height: isMobile ? 195 : 230,
         });
       }
     });
@@ -210,17 +193,19 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Calculate coordinates
+  // Calculate coordinates with generous breathing space so numbers never touch the graph
   const isMobileView = typeof window !== "undefined" && window.innerWidth < 640;
-  const paddingX = isMobileView ? 30 : 40;
-  const paddingY = isMobileView ? 14 : 20;
-  const labelOffset = isMobileView ? 11 : 16;
-  const chartWidth = dimensions.width - paddingX * 2;
-  const chartHeight = dimensions.height - paddingY * 2;
+  const paddingLeft = isMobileView ? 44 : 50;
+  const paddingRight = isMobileView ? 20 : 28;
+  const paddingTop = isMobileView ? 16 : 22;
+  const paddingBottom = isMobileView ? 34 : 38;
+  const labelOffset = isMobileView ? 20 : 24;
+  const chartWidth = Math.max(dimensions.width - paddingLeft - paddingRight, 100);
+  const chartHeight = Math.max(dimensions.height - paddingTop - paddingBottom, 60);
 
   const points = chartData.map((d, index) => {
-    const x = paddingX + (index / (chartData.length - 1)) * chartWidth;
-    const y = paddingY + chartHeight - (d.rate / 100) * chartHeight;
+    const x = paddingLeft + (index / (chartData.length - 1)) * chartWidth;
+    const y = paddingTop + chartHeight - (d.rate / 100) * chartHeight;
     return { x, y, label: d.day, val: d.rate };
   });
 
@@ -241,7 +226,7 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
 
   // Generate fill path
   const fillD = points.length > 0
-    ? `${pathD} L ${points[points.length - 1].x} ${paddingY + chartHeight} L ${points[0].x} ${paddingY + chartHeight} Z`
+    ? `${pathD} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`
     : "";
 
   // Handle mouse move to display vertical ruler and update tooltips
@@ -262,7 +247,7 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
       }
     });
 
-    if (mouseX >= paddingX - 10 && mouseX <= paddingX + chartWidth + 10) {
+    if (mouseX >= paddingLeft - 10 && mouseX <= paddingLeft + chartWidth + 10) {
       setHoveredIndex(closestIndex);
       setTooltipPos({
         x: points[closestIndex].x,
@@ -280,44 +265,44 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
   return (
     <div 
       id="sabit-progress-chart-card"
-      className={`rounded-2xl p-3.5 sm:p-6 border transition-all duration-300 flex flex-col h-[235px] sm:h-[380px] relative ${
+      className={`rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border transition-all duration-300 flex flex-col h-auto sm:h-[380px] min-h-[260px] relative overflow-hidden ${
         isDark 
-          ? "bg-slate-900 border-slate-800 text-white shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)]" 
-          : "bg-white border-[#E5E7EB] shadow-[0_4px_20px_rgba(15,23,42,0.03)] hover:shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+          ? "bg-[#1C1C1E] border-white/10 text-white shadow-sm" 
+          : "bg-white border-slate-200/60 text-slate-900 shadow-xs"
       }`}
     >
       {/* Chart Header */}
-      <div className="flex justify-between items-center mb-2 sm:mb-4 gap-2 shrink-0">
+      <div className="flex justify-between items-center mb-3 sm:mb-4 gap-2 shrink-0">
         {/* Header Title */}
         <div>
-          <h4 className={`text-xs font-bold flex items-center gap-1.5 ${isDark ? "text-slate-100" : "text-[#0F172A]"}`}>
-            <span className={`p-1 rounded-md ${isDark ? "bg-blue-950/80 text-blue-400" : "bg-blue-50 text-blue-600"}`}>
-              <LucideIcon name="TrendingUp" size={12} />
+          <h4 className={`text-xs sm:text-sm font-bold tracking-tight flex items-center gap-2 ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+            <span className={`p-1.5 rounded-full ${isDark ? "bg-[#007AFF]/20 text-[#007AFF]" : "bg-blue-50 text-[#007AFF]"}`}>
+              <LucideIcon name="TrendingUp" size={14} />
             </span>
-            <span>FlowHabit Analytics</span>
+            <span>Gammy Analytics</span>
           </h4>
         </div>
         
         {/* Actions Row */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Time Switcher */}
-          <div className={`flex p-0.5 sm:p-1 rounded-lg gap-0.5 sm:gap-1 border ${isDark ? "bg-slate-850 border-slate-700" : "bg-slate-100 border-[#E5E7EB]"}`}>
+          {/* iOS Segmented Control Track */}
+          <div className={`flex p-1 rounded-full gap-1 border transition-all ${isDark ? "bg-white/10 border-white/5" : "bg-slate-100/90 border-slate-200/60"}`}>
             <button
               onClick={() => onViewModeChange("week")}
-              className={`px-2 sm:px-3 py-1 text-[11px] sm:text-[10px] font-bold rounded transition-all cursor-pointer ${
+              className={`px-3 py-1 text-[10px] font-bold rounded-full transition-all duration-200 cursor-pointer active:scale-95 ${
                 viewMode === "week"
-                  ? isDark ? "bg-slate-800 text-blue-400" : "bg-white text-[#2563EB] shadow-sm"
-                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-[#0F172A]"
+                  ? isDark ? "bg-[#007AFF] text-white shadow-sm" : "bg-white text-[#007AFF] shadow-xs"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
               }`}
             >
               <span className="sm:inline hidden">One </span>Week
             </button>
             <button
               onClick={() => onViewModeChange("month")}
-              className={`px-2 sm:px-3 py-1 text-[11px] sm:text-[10px] font-bold rounded transition-all cursor-pointer ${
+              className={`px-3 py-1 text-[10px] font-bold rounded-full transition-all duration-200 cursor-pointer active:scale-95 ${
                 viewMode === "month"
-                  ? isDark ? "bg-slate-800 text-blue-400" : "bg-white text-[#2563EB] shadow-sm"
-                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-[#0F172A]"
+                  ? isDark ? "bg-[#007AFF] text-white shadow-sm" : "bg-white text-[#007AFF] shadow-xs"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Month
@@ -326,53 +311,14 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
         </div>
       </div>
 
-      {/* Habit Completion Motivation Line - Hidden on Mobile */}
-      <div className={`hidden sm:flex items-center gap-2.5 p-2.5 sm:p-3 rounded-xl border mb-2.5 transition-all ${
-        completedToday > 0
-          ? isDark ? "bg-blue-950/40 border-blue-900/60 text-blue-200" : "bg-blue-50/80 border-blue-200/80 text-blue-900"
-          : isDark ? "bg-slate-800/60 border-slate-700/60 text-slate-300" : "bg-slate-50 border-slate-200/80 text-slate-700"
-      }`}>
-        <div className={`p-1.5 rounded-lg shrink-0 ${
-          completedToday > 0 ? "bg-blue-600 text-white" : "bg-blue-100 text-blue-600"
-        }`}>
-          <LucideIcon name={completedToday > 0 ? "Flame" : "Sparkles"} size={14} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-xs font-bold truncate">
-              {completedToday === totalHabits && totalHabits > 0
-                ? `🎉 All ${totalHabits} habits completed! Keep the fire burning!`
-                : completedToday > 0
-                ? `🔥 ${completedToday} of ${totalHabits} habits completed! Great push today!`
-                : "✨ Build your streak — complete a habit today!"
-              }
-            </span>
-            {/* Change Quote Icon Button */}
-            <button
-              onClick={handleNextQuote}
-              className={`p-1 rounded-md transition-all active:scale-90 cursor-pointer shrink-0 ${
-                isDark 
-                  ? "hover:bg-slate-800 text-slate-400 hover:text-blue-400" 
-                  : "hover:bg-slate-200/60 text-slate-500 hover:text-blue-600"
-              }`}
-              title="Change motivation line"
-            >
-              <LucideIcon name="RefreshCw" size={12} className="hover:rotate-180 transition-transform duration-300" />
-            </button>
-          </div>
-          <p className={`text-[11px] font-medium italic truncate mt-0.5 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
-            “{MOTIVATIONAL_QUOTES[quoteIndex]}”
-          </p>
-        </div>
-      </div>
 
       {/* Chart Canvas Area */}
-      <div ref={containerRef} className="flex-1 w-full min-h-0 relative select-none">
+      <div ref={containerRef} className="flex-1 w-full min-h-0 relative select-none overflow-hidden max-w-full">
         <svg
           ref={svgRef}
           width={dimensions.width}
           height={dimensions.height}
-          className="overflow-visible cursor-crosshair"
+          className="overflow-visible cursor-crosshair max-w-full block"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         >
@@ -421,26 +367,26 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
             </linearGradient>
           </defs>
 
-          {/* Grid lines (Y-axis thresholds) */}
+          {/* Grid lines (Y-axis thresholds) with clean offset */}
           {[0, 50, 100].map((level) => {
-            const y = paddingY + chartHeight - (level / 100) * chartHeight;
+            const y = paddingTop + chartHeight - (level / 100) * chartHeight;
             return (
               <g key={level}>
                 <line
-                  x1={paddingX}
+                  x1={paddingLeft}
                   y1={y}
-                  x2={paddingX + chartWidth}
+                  x2={paddingLeft + chartWidth}
                   y2={y}
                   stroke={`url(#grid-line-${uniqueId})`}
                   strokeWidth={1}
                   strokeDasharray="4 4"
                 />
                 <text
-                  x={paddingX - 8}
+                  x={paddingLeft - 10}
                   y={y + 3.5}
                   textAnchor="end"
-                  fill={isDark ? "#94A3B8" : "#475569"}
-                  className="text-[9px] font-bold font-sans"
+                  fill={isDark ? "#94A3B8" : "#64748B"}
+                  className="text-[10px] sm:text-[11px] font-bold font-sans"
                 >
                   {level}%
                 </text>
@@ -480,9 +426,9 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
           {hoveredIndex !== null && hoveredIndex < points.length && (
             <line
               x1={points[hoveredIndex].x}
-              y1={paddingY}
+              y1={paddingTop}
               x2={points[hoveredIndex].x}
-              y2={paddingY + chartHeight}
+              y2={paddingTop + chartHeight}
               stroke={isDark ? "#60A5FA" : "#3B82F6"}
               strokeWidth={1}
               strokeDasharray="3 3"
@@ -529,11 +475,11 @@ export const ProgressChart: React.FC<ProgressChartProps> = ({
                 {/* Horizontal Labels */}
                 <text
                   x={pt.x}
-                  y={paddingY + chartHeight + labelOffset}
+                  y={paddingTop + chartHeight + labelOffset}
                   textAnchor="middle"
-                  fill={isHovered ? "#3B82F6" : isDark ? "#E2E8F0" : "#475569"}
-                  className={`text-[9px] font-extrabold transition-colors ${
-                    isHovered ? "font-black" : ""
+                  fill={isHovered ? "#3B82F6" : isDark ? "#CBD5E1" : "#64748B"}
+                  className={`text-[10px] sm:text-[11px] font-semibold transition-colors ${
+                    isHovered ? "font-bold text-[#007AFF]" : ""
                   }`}
                 >
                   {isHovered || isImportantNode ? pt.label : ""}

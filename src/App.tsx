@@ -5,6 +5,7 @@ import ProgressChart from "./components/ProgressChart";
 import RightPanels from "./components/RightPanels";
 import HabitTrackerTable from "./components/HabitTrackerTable";
 import AICoachChat from "./components/AICoachChat";
+import IOSBottomTabBar from "./components/IOSBottomTabBar";
 import { initialHabits } from "./data";
 import { Habit } from "./types";
 import LucideIcon from "./components/LucideIcon";
@@ -12,29 +13,59 @@ import UserBanner from "./components/UserBanner";
 import HabitModal from "./components/HabitModal";
 import SettingsModal from "./components/SettingsModal";
 import { AuthModal } from "./components/AuthModal";
+import { LandingScreen } from "./components/LandingScreen";
 import { PerformanceView, AccountView, SignOutView } from "./components/ExtraViews";
 import { 
   onAuthChange, 
   logoutUser, 
-  loginWithGoogle,
+  handleRedirectAuthResult,
   subscribeHabits, 
   subscribeHabitLogs, 
+  fetchUserHabitsDirectly,
+  fetchUserHabitLogsDirectly,
   addHabitToFirestore, 
   updateHabitInFirestore, 
   deleteHabitFromFirestore, 
   setHabitLogStatus,
-  syncUserProfile
+  syncUserProfile,
+  migrateGuestDataToUserIfNeeded
 } from "./lib/firestoreService";
+import { ensureAnonymousAuth } from "./lib/firebase";
+import { 
+  saveHabitToSupabase, 
+  saveHabitLogToSupabase, 
+  deleteHabitFromSupabase 
+} from "./lib/supabaseService";
+import { supabase } from "./supabaseClient";
+
+// Storage key constants
+const HABITS_MASTER_KEY = "sabit_habits_master";
+const LOGS_MASTER_KEY = "sabit_all_logs_master";
 
 const getDateStrForDay = (dayNum: number, monthName: string, yearStr: string) => {
   const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
   ];
-  const monthIdx = months.indexOf(monthName);
-  const m = monthIdx >= 0 ? String(monthIdx + 1).padStart(2, "0") : "07";
+  const monthIdx = months.indexOf(monthName.toLowerCase());
+  const m = monthIdx >= 0 ? String(monthIdx + 1).padStart(2, "0") : "08";
   const d = String(dayNum).padStart(2, "0");
   return `${yearStr}-${m}-${d}`;
+};
+
+const isDateInFuture = (dayNum: number, monthName: string, yearStr: string): boolean => {
+  const months = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
+  ];
+  const now = new Date();
+  const mIdx = months.indexOf(monthName.toLowerCase());
+  const targetYear = parseInt(yearStr, 10);
+  const targetMonth = mIdx >= 0 ? mIdx : now.getMonth();
+  
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const targetDate = new Date(targetYear, targetMonth, dayNum).getTime();
+  return targetDate > todayStart;
 };
 
 export default function App() {
@@ -43,163 +74,271 @@ export default function App() {
       "January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"
     ];
-    return months[new Date().getMonth()] || "July";
+    return months[new Date().getMonth()] || "August";
   });
   const [currentYear, setCurrentYear] = useState(() => String(new Date().getFullYear()) || "2026");
-  const [currentDay, setCurrentDay] = useState(() => new Date().getDate() || 21);
+  const [currentDay, setCurrentDay] = useState(() => new Date().getDate() || 14);
   const [activeTab, setActiveTab] = useState("dashboard");
 
   const [user, setUser] = useState<any | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [loadingCloud, setLoadingCloud] = useState(false);
+  const prevUserRef = useRef<any>(null);
+  const [loginCelebration, setLoginCelebration] = useState<{
+    active: boolean;
+    title: string;
+    subtitle: string;
+  } | null>(null);
 
-  // Dynamic habits storage key based on Month and Year
+  const triggerLoginCelebration = (title = "Login Successful!", subtitle = "Welcome to Gammy. Loading your habit dashboard...") => {
+    setLoginCelebration({ active: true, title, subtitle });
+    setTimeout(() => {
+      setLoginCelebration(null);
+    }, 1800);
+  };
+
+  const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gammy_is_logged_out") === "true";
+    }
+    return false;
+  });
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "signup" | "forgot" | "verify">("login");
+  const [authModalUnverifiedEmail, setAuthModalUnverifiedEmail] = useState<string | undefined>(undefined);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  // Storage key based on Month and Year
   const habitsKey = `sabit_habits_${currentMonth}_${currentYear}`;
 
-  const [habits, setHabits] = useState<Habit[]>(initialHabits);
-  const [habitLogs, setHabitLogs] = useState<any[]>([]);
-  
-  // Track which key is currently loaded
-  const loadedKeyRef = useRef(habitsKey);
+  // Synchronously initialize habits from local cache so screen is NEVER blank
+  const [rawHabits, setRawHabits] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const lastUid = localStorage.getItem("sabit_last_uid");
+        if (lastUid) {
+          const userSaved = localStorage.getItem(`sabit_user_habits_${lastUid}`);
+          if (userSaved) {
+            const parsed = JSON.parse(userSaved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        }
+      } catch (_) {}
+    }
+    return initialHabits;
+  });
 
-  // Subscribe to Firebase Authentication & Real-time Firestore Listeners
+  // Synchronously initialize logs from local cache so all past recordings appear immediately
+  const [habitLogs, setHabitLogs] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const lastUid = localStorage.getItem("sabit_last_uid");
+        if (lastUid) {
+          const userLogs = localStorage.getItem(`sabit_user_logs_${lastUid}`);
+          if (userLogs) {
+            const parsed = JSON.parse(userLogs);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        }
+      } catch (_) {}
+    }
+    return [];
+  });
+
+  const [habits, setHabits] = useState<Habit[]>([]);
+
+  // 1. Listen for Authentication changes (Firebase Auth is authoritative)
   useEffect(() => {
-    const checkLocalGuest = () => {
-      const storedMock = localStorage.getItem("sabit_mock_user");
-      if (storedMock) {
-        try {
-          return JSON.parse(storedMock);
-        } catch (_) {}
-      }
-      return null;
-    };
+    handleRedirectAuthResult().catch(err => console.error("Error checking redirect result:", err));
 
-    const unsubscribeAuth = onAuthChange(async (currentUser) => {
-      const activeUser = currentUser || checkLocalGuest();
-      setUser(activeUser);
-      if (activeUser) {
-        if (currentUser) {
-          await syncUserProfile(currentUser);
+    const unsubscribeAuth = onAuthChange((currentUser) => {
+      if (currentUser) {
+        console.log("🔑 [App] Active Firebase User session:", currentUser.email || "Anonymous", "| UID:", currentUser.uid);
+        
+        // If transitioning from unauthenticated/anonymous or switching user accounts
+        if (currentUser.email && (!prevUserRef.current || !prevUserRef.current.email)) {
+          triggerLoginCelebration(
+            "Logged in successfully", 
+            currentUser.email || (currentUser.displayName ? `Welcome back, ${currentUser.displayName}!` : "Welcome back!")
+          );
         }
-        localStorage.setItem("sabit_profile_name", activeUser.displayName || "Anoop Brown");
-        if (activeUser.email) {
-          localStorage.setItem("sabit_profile_email", activeUser.email);
+
+        // If switching between different user IDs, load that specific user's cached data immediately
+        if (currentUser.uid && (!prevUserRef.current || prevUserRef.current.uid !== currentUser.uid)) {
+          try {
+            localStorage.setItem("sabit_last_uid", currentUser.uid);
+            const userSaved = localStorage.getItem(`sabit_user_habits_${currentUser.uid}`);
+            if (userSaved) {
+              const parsed = JSON.parse(userSaved);
+              if (Array.isArray(parsed)) setRawHabits(parsed);
+            } else {
+              setRawHabits(initialHabits);
+            }
+            const userLogs = localStorage.getItem(`sabit_user_logs_${currentUser.uid}`);
+            if (userLogs) {
+              const parsedLogs = JSON.parse(userLogs);
+              if (Array.isArray(parsedLogs)) setHabitLogs(parsedLogs);
+            } else {
+              setHabitLogs([]);
+            }
+          } catch (_) {}
         }
-        window.dispatchEvent(new CustomEvent("sabit_profile_changed", { detail: activeUser.displayName || "Anoop Brown" }));
+
+        prevUserRef.current = currentUser;
+        setUser(currentUser);
+
+        if (currentUser.email) {
+          // If a registered user is authenticated, disable logged-out landing lock and navigate directly to dashboard
+          localStorage.removeItem("gammy_is_logged_out");
+          setShowLandingPage(false);
+          setActiveTab("dashboard");
+          setIsAuthModalOpen(false);
+        }
+        if (currentUser.displayName || currentUser.email) {
+          const rawName = currentUser.displayName || (currentUser.email ? (
+            (() => {
+              const prefix = currentUser.email.split("@")[0];
+              const clean = prefix.replace(/[0-9._-]+$/, "") || prefix;
+              return clean.charAt(0).toUpperCase() + clean.slice(1);
+            })()
+          ) : "User");
+          localStorage.setItem("sabit_profile_name", rawName);
+          if (currentUser.email) {
+            localStorage.setItem("sabit_profile_email", currentUser.email);
+          }
+          window.dispatchEvent(new CustomEvent("sabit_profile_changed", { detail: rawName }));
+        }
+      } else {
+        prevUserRef.current = null;
+        console.log("🔑 [App] Establishing secure Firestore session...");
+        ensureAnonymousAuth().catch(e => console.warn("Anonymous auth notice:", e));
       }
     });
-
-    const handleProfileChange = () => {
-      const guest = checkLocalGuest();
-      if (guest) setUser(guest);
-    };
-    window.addEventListener("sabit_profile_changed", handleProfileChange);
 
     return () => {
       unsubscribeAuth();
-      window.removeEventListener("sabit_profile_changed", handleProfileChange);
     };
   }, []);
 
-  // Real-time Firestore habits & logs synchronization when user is authenticated
+  // 2. Real-time Firestore & Cloud Synchronization strictly per user UID
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) {
+      return;
+    }
 
-    setLoadingCloud(true);
-    let isInitialHabitSync = true;
+    const currentUid = user.uid;
+    let unsubHabits = () => {};
+    let unsubLogs = () => {};
 
-    // 1. Subscribe to habits
-    const unsubscribeHabits = subscribeHabits(user.uid, async (cloudHabits) => {
-      if (cloudHabits && cloudHabits.length > 0) {
-        // Map cloud habits to local Habit objects
-        const mappedHabits: Habit[] = cloudHabits.map((ch) => ({
-          id: ch.id,
-          name: ch.name,
-          goal: ch.goal || "1x / day",
-          color: ch.color || "#2563EB",
-          iconName: ch.icon || "Target",
-          category: ch.category || "habit",
-          active: ch.active !== false,
-          streak: 0,
-          days: Array(31).fill("locked"),
-        }));
-        setHabits(mappedHabits);
-      } else if (isInitialHabitSync) {
-        // Seed default habits for new users
-        isInitialHabitSync = false;
-        for (const defaultHabit of initialHabits) {
-          await addHabitToFirestore(user.uid, {
-            name: defaultHabit.name,
-            goal: defaultHabit.goal,
-            color: defaultHabit.color,
-            iconName: defaultHabit.iconName,
-            category: defaultHabit.category,
-            active: true,
-          });
-        }
+    (async () => {
+      // 1. First ensure user's cloud records are initialized/seeded if new account
+      try {
+        await migrateGuestDataToUserIfNeeded(currentUid);
+      } catch (err) {
+        console.warn("Migration warning:", err);
       }
-      setLoadingCloud(false);
-    });
 
-    // 2. Subscribe to habit logs
-    const unsubscribeLogs = subscribeHabitLogs(user.uid, (cloudLogs) => {
-      setHabitLogs(cloudLogs);
-    });
+      // 2. Immediately fetch direct from cloud for instantaneous load
+      try {
+        const directHabits = await fetchUserHabitsDirectly(currentUid);
+        if (Array.isArray(directHabits) && directHabits.length > 0) {
+          setRawHabits(directHabits);
+          try {
+            localStorage.setItem(`sabit_user_habits_${currentUid}`, JSON.stringify(directHabits));
+          } catch (_) {}
+        }
+      } catch (err) {
+        console.warn("Direct habit load error:", err);
+      }
+
+      try {
+        const directLogs = await fetchUserHabitLogsDirectly(currentUid);
+        if (Array.isArray(directLogs)) {
+          setHabitLogs(directLogs);
+          try {
+            localStorage.setItem(`sabit_user_logs_${currentUid}`, JSON.stringify(directLogs));
+          } catch (_) {}
+        }
+      } catch (err) {
+        console.warn("Direct logs load error:", err);
+      }
+
+      // 3. Establish live real-time listeners for updates
+      unsubHabits = subscribeHabits(currentUid, async (cloudHabits) => {
+        if (Array.isArray(cloudHabits) && cloudHabits.length > 0) {
+          setRawHabits(cloudHabits);
+          try {
+            localStorage.setItem(`sabit_user_habits_${currentUid}`, JSON.stringify(cloudHabits));
+          } catch (_) {}
+        }
+      });
+
+      unsubLogs = subscribeHabitLogs(currentUid, (cloudLogs) => {
+        if (Array.isArray(cloudLogs)) {
+          setHabitLogs(cloudLogs);
+          try {
+            localStorage.setItem(`sabit_user_logs_${currentUid}`, JSON.stringify(cloudLogs));
+          } catch (_) {}
+        }
+      });
+    })();
 
     return () => {
-      unsubscribeHabits();
-      unsubscribeLogs();
+      unsubHabits();
+      unsubLogs();
     };
-  }, [user]);
+  }, [user?.uid]);
 
-  // Combine habits with habitLogs whenever habits, habitLogs, month, or year changes
+  // 3. Re-calculate habits + days array + streak whenever rawHabits, habitLogs, month, or year changes
   useEffect(() => {
-    if (!user || habitLogs.length === 0) return;
-
-    const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
+    const months = [
+      "january", "february", "march", "april", "may", "june",
+      "july", "august", "september", "october", "november", "december"
     ];
-    const monthIdx = monthNames.indexOf(currentMonth);
-    const monthPrefix = `${currentYear}-${String(monthIdx + 1).padStart(2, "0")}`;
+    const monthIdx = months.indexOf(currentMonth.toLowerCase());
+    const mPad = monthIdx >= 0 ? String(monthIdx + 1).padStart(2, "0") : "08";
+    const monthPrefix = `${currentYear}-${mPad}`;
 
-    setHabits((prevHabits) =>
-      prevHabits.map((habit) => {
-        const newDays: ("completed" | "skipped" | "locked")[] = Array(31).fill("locked");
-        
-        // Find logs for this habit matching monthPrefix
-        const logsForHabit = habitLogs.filter(
-          (log) => log.habitId === habit.id && log.date && log.date.startsWith(monthPrefix)
-        );
+    const computedHabits: Habit[] = rawHabits.map((raw) => {
+      const days: ("completed" | "skipped" | "locked")[] = Array(31).fill("locked");
 
-        logsForHabit.forEach((log) => {
-          const parts = log.date.split("-");
-          if (parts.length === 3) {
-            const dayNum = parseInt(parts[2], 10);
-            if (dayNum >= 1 && dayNum <= 31) {
-              newDays[dayNum - 1] = log.status as "completed" | "skipped" | "locked";
-            }
+      const logsForHabit = habitLogs.filter(
+        (log) => log.habitId === raw.id && log.date && log.date.startsWith(monthPrefix)
+      );
+
+      logsForHabit.forEach((log) => {
+        const parts = log.date.split("-");
+        if (parts.length === 3) {
+          const dayNum = parseInt(parts[2], 10);
+          if (dayNum >= 1 && dayNum <= 31 && log.status) {
+            days[dayNum - 1] = log.status as "completed" | "skipped" | "locked";
           }
-        });
+        }
+      });
 
-        const newStreak = recalculateStreakAndDays(newDays);
-        return {
-          ...habit,
-          days: newDays,
-          streak: newStreak
-        };
-      })
-    );
-  }, [habitLogs, currentMonth, currentYear, user]);
+      const streak = recalculateStreakAndDays(days);
 
-  // Save changes to habits dynamically in localStorage as fallback
-  useEffect(() => {
-    if (typeof window !== "undefined" && !user) {
-      if (loadedKeyRef.current === habitsKey) {
-        localStorage.setItem(habitsKey, JSON.stringify(habits));
-      }
+      return {
+        id: raw.id,
+        name: raw.name,
+        goal: raw.goal || "1x / day",
+        color: raw.color || "#2563EB",
+        iconName: raw.iconName || raw.icon || "Target",
+        category: raw.category || "habit",
+        active: raw.active !== false,
+        days,
+        streak
+      };
+    });
+
+    setHabits(computedHabits);
+
+    // Sync master copy to localStorage as cache
+    if (typeof window !== "undefined") {
+      const uid = user?.uid || "guest";
+      try {
+        localStorage.setItem(`sabit_user_habits_${uid}_${habitsKey}`, JSON.stringify(computedHabits));
+      } catch (_) {}
     }
-  }, [habits, habitsKey, user]);
+  }, [rawHabits, habitLogs, currentMonth, currentYear, user, habitsKey]);
 
   const [colorTheme, setColorTheme] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -231,49 +370,39 @@ export default function App() {
     window.dispatchEvent(new CustomEvent("sabit_color_theme_changed", { detail: colorTheme }));
   }, [colorTheme]);
 
-  // Keep date in sync
+  // Keep day in sync with today
   useEffect(() => {
-    const updateToToday = () => {
+    const updateDayOnly = () => {
       const today = new Date();
-      const months = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-      ];
-      const m = months[today.getMonth()] || "July";
-      const y = String(today.getFullYear()) || "2026";
-      const d = today.getDate();
-      
-      setCurrentMonth(m);
-      setCurrentYear(y);
-      setCurrentDay(d);
+      setCurrentDay(today.getDate());
     };
 
-    updateToToday();
-    const interval = setInterval(updateToToday, 15 * 60 * 1000);
-    const handleFocus = () => updateToToday();
-    
-    if (typeof window !== "undefined") {
-      window.addEventListener("focus", handleFocus);
-      document.addEventListener("visibilitychange", handleFocus);
-    }
-
-    return () => {
-      clearInterval(interval);
-      if (typeof window !== "undefined") {
-        window.removeEventListener("focus", handleFocus);
-        document.removeEventListener("visibilitychange", handleFocus);
-      }
-    };
+    const interval = setInterval(updateDayOnly, 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
   
-  const [theme, setTheme] = useState<"light">("light");
-  const [isDark, setIsDark] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("sabit_theme") as "light" | "dark") || "light";
+    }
+    return "light";
+  });
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sabit_theme") === "dark";
+    }
+    return false;
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    localStorage.setItem("sabit_theme", "light");
-    setIsDark(false);
-  }, [theme]);
+    localStorage.setItem("sabit_theme", isDark ? "dark" : "light");
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [isDark]);
 
   const [isAICoachOpen, setIsAICoachOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"week" | "month" >("month");
@@ -304,7 +433,7 @@ export default function App() {
     const handleBeastTrigger = () => {
       setIsBeastMode(prev => {
         const next = !prev;
-        triggerToast(next ? "🔥 BEAST MODE ACTIVATED! 100% focus locked!" : "Beast mode deactivated. Rest and recover.");
+        triggerToast(next ? "⚡ BEAST MODE ACTIVATED! 100% focus locked!" : "Beast mode deactivated. Rest and recover.");
         return next;
       });
     };
@@ -323,18 +452,27 @@ export default function App() {
       }
     };
 
+    const handleResetTrigger = () => {
+      setIsResetConfirmModalOpen(true);
+    };
+
     window.addEventListener("sabit_trigger_mantra", handleMantraTrigger);
     window.addEventListener("sabit_trigger_beast", handleBeastTrigger);
     window.addEventListener("sabit_trigger_toast", handleCustomToast);
     window.addEventListener("sabit_date_changed", handleDateChanged);
+    window.addEventListener("sabit_reset_progress", handleResetTrigger);
 
     return () => {
       window.removeEventListener("sabit_trigger_mantra", handleMantraTrigger);
       window.removeEventListener("sabit_trigger_beast", handleBeastTrigger);
       window.removeEventListener("sabit_trigger_toast", handleCustomToast);
       window.removeEventListener("sabit_date_changed", handleDateChanged);
+      window.removeEventListener("sabit_reset_progress", handleResetTrigger);
     };
   }, []);
+
+  // Reset confirmation modal state
+  const [isResetConfirmModalOpen, setIsResetConfirmModalOpen] = useState(false);
 
   // Habit management states
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
@@ -358,51 +496,85 @@ export default function App() {
   };
 
   const handleSaveHabit = async (habitData: { name: string; goal: string; color: string; iconName: string; category: "habit" | "active" | "leisure"; active?: boolean }) => {
+    setIsHabitModalOpen(false);
+    const uid = user?.uid;
+
     if (selectedHabitForEdit) {
       // Edit Mode
-      if (user) {
-        await updateHabitInFirestore(user.uid, selectedHabitForEdit.id, habitData);
+      const editId = selectedHabitForEdit.id;
+      if (uid) {
+        updateHabitInFirestore(uid, editId, habitData).catch((err) => console.warn("Firestore habit update warning:", err));
+        saveHabitToSupabase(uid, { id: editId, ...habitData }).catch((err) => console.warn("Supabase habit update warning:", err));
       }
-      const updatedHabits = habits.map((h) =>
-        h.id === selectedHabitForEdit.id
-          ? { ...h, ...habitData, streak: recalculateStreakAndDays(h.days) }
-          : h
-      );
-      setHabits(updatedHabits);
+      setRawHabits((prev) => {
+        const next = prev.map((h) =>
+          h.id === editId ? { ...h, ...habitData } : h
+        );
+        if (typeof window !== "undefined" && uid) {
+          try {
+            localStorage.setItem(`sabit_user_habits_${uid}`, JSON.stringify(next));
+          } catch (_) {}
+        }
+        return next;
+      });
       triggerToast(`Habit "${habitData.name}" updated successfully!`);
     } else {
       // Add Mode
-      let newHabitId = "h_" + Date.now();
-      if (user) {
-        const cloudId = await addHabitToFirestore(user.uid, habitData);
-        if (cloudId) newHabitId = cloudId;
-      }
-      const newDays: ("completed" | "skipped" | "locked")[] = Array(31).fill("locked") as any;
-      const newHabit: Habit = {
+      const newHabitId = "h_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+      const newHabitItem = {
         id: newHabitId,
         name: habitData.name,
-        goal: habitData.goal,
-        color: habitData.color,
-        iconName: habitData.iconName,
-        category: habitData.category,
+        goal: habitData.goal || "1x / day",
+        color: habitData.color || "#2563EB",
+        iconName: habitData.iconName || "Target",
+        category: habitData.category || "habit",
         active: habitData.active !== false,
-        streak: 0,
-        days: newDays,
       };
-      setHabits([...habits, newHabit]);
-      triggerToast(`New habit "${habitData.name}" established in the ledger!`);
+
+      // Instantly update state & local storage for immediate UI rendering
+      setRawHabits((prev) => {
+        const next = [...prev, newHabitItem];
+        if (typeof window !== "undefined" && uid) {
+          try {
+            localStorage.setItem(`sabit_user_habits_${uid}`, JSON.stringify(next));
+          } catch (_) {}
+        }
+        return next;
+      });
+
+      // Synchronize in background if user is authenticated
+      if (uid) {
+        addHabitToFirestore(uid, newHabitItem).catch((err) => console.warn("Firestore habit add warning:", err));
+        saveHabitToSupabase(uid, newHabitItem).catch((err) => console.warn("Supabase habit add warning:", err));
+      }
+
+      triggerToast(`New habit "${habitData.name}" added to tracker!`);
     }
   };
 
   const handleDeleteHabit = async () => {
     if (selectedHabitForEdit) {
-      if (user) {
-        await deleteHabitFromFirestore(user.uid, selectedHabitForEdit.id);
-      }
-      const updatedHabits = habits.filter((h) => h.id !== selectedHabitForEdit.id);
-      setHabits(updatedHabits);
+      const habitToDelete = selectedHabitForEdit;
+      const uid = user?.uid;
       setIsHabitModalOpen(false);
-      triggerToast(`Habit "${selectedHabitForEdit.name}" has been removed.`);
+      setSelectedHabitForEdit(null);
+
+      if (uid) {
+        deleteHabitFromFirestore(uid, habitToDelete.id).catch((err) => console.warn("Firestore delete warning:", err));
+        deleteHabitFromSupabase(uid, habitToDelete.id).catch((err) => console.warn("Supabase delete warning:", err));
+      }
+
+      setRawHabits((prev) => {
+        const next = prev.filter((h) => h.id !== habitToDelete.id);
+        if (typeof window !== "undefined" && uid) {
+          try {
+            localStorage.setItem(`sabit_user_habits_${uid}`, JSON.stringify(next));
+          } catch (_) {}
+        }
+        return next;
+      });
+
+      triggerToast(`Habit "${habitToDelete.name}" has been removed.`);
     }
   };
 
@@ -432,12 +604,8 @@ export default function App() {
   // Handles toggling a day in the habits checklist
   const handleToggleDay = async (habitId: string, dayIndex: number, forceStatus?: 'completed' | 'skipped' | 'locked') => {
     const dayNum = dayIndex + 1;
-    if (dayNum < currentDay) {
-      triggerToast(`Previous days (Day ${dayNum}) are locked and cannot be changed.`);
-      return;
-    }
-    if (dayNum > currentDay) {
-      triggerToast(`Future days (Day ${dayNum}) are locked and cannot be logged yet.`);
+    if (isDateInFuture(dayNum, currentMonth, currentYear)) {
+      triggerToast(`Future days (${currentMonth} ${dayNum}, ${currentYear}) are locked and cannot be logged yet.`);
       return;
     }
 
@@ -468,10 +636,49 @@ export default function App() {
     });
     setHabits(updatedHabits);
 
-    // Save to Firestore if user is authenticated
-    if (user) {
-      const dateStr = getDateStrForDay(dayNum, currentMonth, currentYear);
+    // Save to LocalStorage strictly scoped to current UID
+    const uid = user?.uid;
+    if (uid) {
+      try {
+        localStorage.setItem(`sabit_user_habits_${uid}_${habitsKey}`, JSON.stringify(updatedHabits));
+        localStorage.setItem(`sabit_user_habits_${uid}`, JSON.stringify(rawHabits));
+      } catch (e) {
+        console.warn("LocalStorage write notice:", e);
+      }
+    }
+
+    // Save log entry to local log list cache & update habitLogs state
+    const dateStr = getDateStrForDay(dayNum, currentMonth, currentYear);
+    const docId = `${habitId}_${dateStr}`;
+    const logObj = {
+      id: docId,
+      habitId,
+      date: dateStr,
+      status: nextStatus === "locked" ? null : nextStatus
+    };
+
+    setHabitLogs((prevLogs) => {
+      const filtered = prevLogs.filter((l) => !(l.habitId === habitId && l.date === dateStr));
+      if (nextStatus !== "locked") {
+        filtered.push(logObj);
+      }
+      if (uid) {
+        try {
+          localStorage.setItem(`sabit_user_logs_${uid}`, JSON.stringify(filtered));
+        } catch (_) {}
+      }
+      return filtered;
+    });
+
+    // Save to Firestore and Supabase if user is authenticated
+    if (user && user.uid) {
       await setHabitLogStatus(
+        user.uid,
+        habitId,
+        dateStr,
+        nextStatus === "locked" ? null : nextStatus
+      );
+      await saveHabitLogToSupabase(
         user.uid,
         habitId,
         dateStr,
@@ -479,28 +686,30 @@ export default function App() {
       );
     }
 
-    triggerToast("Habit tick logged in Firestore!");
+    triggerToast(nextStatus === "completed" ? "Habit marked completed! 🔥" : nextStatus === "skipped" ? "Habit marked skipped" : "Habit tick cleared");
   };
 
-  // Clear All Ticks - resets ticks for current day/month
+  // Clear All Ticks - resets ticks for current day
   const handleLockAll = async () => {
-    const updatedHabits = habits.map((habit) => {
-      const newDays = Array(31).fill("locked") as ("completed" | "skipped" | "locked")[];
-      return {
-        ...habit,
-        days: newDays,
-        streak: 0
-      };
+    const dateStr = getDateStrForDay(currentDay, currentMonth, currentYear);
+    
+    // Clear logs for the current day
+    setHabitLogs((prev) => {
+      const filtered = prev.filter((l) => l.date !== dateStr);
+      try {
+        const uid = user?.uid || "guest";
+        localStorage.setItem(LOGS_MASTER_KEY, JSON.stringify(filtered));
+        localStorage.setItem(`sabit_user_logs_${uid}`, JSON.stringify(filtered));
+      } catch (_) {}
+      return filtered;
     });
-    setHabits(updatedHabits);
 
-    if (user) {
-      const dateStr = getDateStrForDay(currentDay, currentMonth, currentYear);
+    if (user && user.uid) {
       for (const h of habits) {
         await setHabitLogStatus(user.uid, h.id, dateStr, null);
       }
     }
-    triggerToast("All ticks cleared! Ready to record your daily habit tick.");
+    triggerToast("Today's ticks cleared!");
   };
 
   const handleTodayClick = () => {
@@ -509,9 +718,9 @@ export default function App() {
       "January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"
     ];
-    const m = months[today.getMonth()] || "July";
+    const m = months[today.getMonth()] || "August";
     const y = String(today.getFullYear()) || "2026";
-    const d = today.getDate() || 21;
+    const d = today.getDate() || 18;
     setCurrentMonth(m);
     setCurrentYear(y);
     setCurrentDay(d);
@@ -525,16 +734,36 @@ export default function App() {
   };
 
   const handleResetProgress = () => {
-    const cleared = habits.map((h) => ({
-      ...h,
-      days: Array(31).fill("locked") as ("completed" | "skipped" | "locked")[],
-      streak: 0,
-    }));
-    setHabits(cleared);
+    setIsResetConfirmModalOpen(true);
   };
 
-  const handleDeleteAllHabits = () => {
+  const handleConfirmResetAllHabits = async () => {
+    setIsResetConfirmModalOpen(false);
+    const uid = user?.uid;
+    if (uid) {
+      for (const h of rawHabits) {
+        await deleteHabitFromFirestore(uid, h.id).catch(() => {});
+        await deleteHabitFromSupabase(uid, h.id).catch(() => {});
+      }
+    }
+    setRawHabits([]);
+    setHabitLogs([]);
     setHabits([]);
+    if (typeof window !== "undefined") {
+      const userKey = uid || "guest";
+      try {
+        localStorage.setItem(HABITS_MASTER_KEY, JSON.stringify([]));
+        localStorage.setItem(LOGS_MASTER_KEY, JSON.stringify([]));
+        localStorage.setItem(`sabit_user_habits_${userKey}`, JSON.stringify([]));
+        localStorage.setItem(`sabit_user_logs_${userKey}`, JSON.stringify([]));
+        localStorage.setItem(`sabit_user_habits_${userKey}_${habitsKey}`, JSON.stringify([]));
+      } catch (_) {}
+    }
+    triggerToast("All habits reset! Start fresh by adding your first habit.");
+  };
+
+  const handleDeleteAllHabits = async () => {
+    handleResetProgress();
   };
 
   const handleNotificationClick = () => {
@@ -598,31 +827,157 @@ export default function App() {
   const currentStreak = Math.max(...filteredHabitsForMetrics.map((h) => h.streak), 0);
   const habitScore = Math.min(Math.max(Math.round(successRate * 0.8 + currentStreak * 0.9), 0), 100);
 
-  return (
-    <div 
-      className={`min-h-screen font-sans antialiased transition-colors duration-300 ${
-        isDark ? "bg-slate-950 text-slate-100" : "bg-[#F8FAFC] text-[#0F172A]"
-      }`}
-    >
-      <div className={`min-h-screen max-w-[1600px] mx-auto shadow-[0_20px_80px_rgba(15,23,42,0.04)] border-x transition-all duration-300 relative ${
-        isBeastMode ? "ring-4 ring-rose-500/80 shadow-[0_0_50px_rgba(244,63,94,0.4)]" : ""
-      } ${
-        isDark ? "bg-slate-900 border-slate-800" : "bg-white border-[#E5E7EB]"
+  // Logout handler that resets session and redirects to the Gammy landing home page
+  const handleSignOut = async () => {
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.warn("Logout error:", e);
+    }
+    prevUserRef.current = null;
+    setUser(null);
+    setRawHabits(initialHabits);
+    setHabitLogs([]);
+    setHabits([]);
+    localStorage.removeItem("sabit_last_uid");
+    localStorage.setItem("gammy_is_logged_out", "true");
+    setShowLandingPage(true);
+    setActiveTab("dashboard");
+    setIsAuthModalOpen(false);
+    triggerToast("Logged out successfully.");
+  };
+
+  // Authentication check - Only users with verified email/login can view the main tracker
+  const isUserLoggedIn = Boolean(user && user.email);
+
+  if (!isUserLoggedIn || showLandingPage) {
+    return (
+      <div className={`min-h-screen font-sans antialiased relative ${
+        isDark ? "bg-[#0B0F17] text-slate-100" : "bg-[#F8FAFC] text-slate-900"
       }`}>
-        
         {/* Floating Interactive Toast */}
         {toastMessage && (
-          <div className={`fixed top-6 left-1/2 -translate-x-1/2 text-xs font-bold py-3 px-5 rounded-xl shadow-xl flex items-center gap-2.5 z-50 border animate-slide-down ${
-            isDark ? "bg-slate-900 text-white border-slate-800" : "bg-[#0F172A] text-white border-slate-800"
+          <div className={`fixed top-6 left-1/2 -translate-x-1/2 text-xs font-bold py-2.5 px-4 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-2 z-50 border animate-slide-down ${
+            isDark ? "bg-slate-900/90 text-white border-slate-800" : "bg-white/90 text-slate-900 border-slate-200"
           }`}>
-            <LucideIcon name="Sparkles" size={13} className="text-[#2563EB] animate-spin-slow" />
+            <LucideIcon name="Sparkles" size={13} className="text-blue-500" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        <LandingScreen
+          onOpenAuth={(mode) => {
+            setAuthModalMode(mode);
+            setIsAuthModalOpen(true);
+          }}
+          isDark={isDark}
+          setIsDark={setIsDark}
+        />
+
+        {/* Authentication Modal */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            setAuthModalUnverifiedEmail(undefined);
+          }}
+          isDark={isDark}
+          onSuccess={(msg) => {
+            triggerLoginCelebration("Logged in successfully", user?.email || msg || "Welcome to Gammy!");
+            triggerToast(msg);
+            setShowLandingPage(false);
+            setActiveTab("dashboard");
+            localStorage.removeItem("gammy_is_logged_out");
+            setIsAuthModalOpen(false);
+          }}
+          initialMode={authModalMode}
+          initialUnverifiedEmail={authModalUnverifiedEmail}
+        />
+      </div>
+    );
+  }
+
+  if (isAuthLoading) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center p-4 transition-colors ${
+        isDark ? "bg-[#000000] text-slate-100" : "bg-[#F2F2F7] text-[#1C1C1E]"
+      }`}>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 animate-pulse">
+            <LucideIcon name="Target" size={20} />
+          </div>
+          <p className="text-xs font-medium text-slate-500">Syncing Gammy ledger...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className={`min-h-screen font-sans antialiased transition-colors duration-300 relative ${
+        isDark ? "bg-[#000000] text-slate-100" : "bg-[#F2F2F7] text-[#1C1C1E]"
+      }`}
+    >
+      {/* Simple White Screen Login Success Card over Blurred Dashboard */}
+      {loginCelebration?.active && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-md animate-fadeIn">
+          <div className="flex flex-col items-center justify-center text-center max-w-sm w-full p-8 sm:p-9 rounded-3xl bg-white text-slate-900 shadow-2xl shadow-slate-900/20 border border-slate-100 ring-1 ring-slate-900/5 animate-scale-success">
+            {/* Simple Animated Green Right-Tick Circle */}
+            <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 ring-8 ring-emerald-50/70 flex items-center justify-center mb-5 shadow-xs">
+              <svg 
+                className="w-8 h-8 text-emerald-600" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="3.2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <polyline 
+                  points="20 6 9 17 4 12" 
+                  className="animate-checkmark-draw" 
+                />
+              </svg>
+            </div>
+
+            {/* Simple Clean Typography */}
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">
+              {loginCelebration.title || "Logged in successfully"}
+            </h2>
+            
+            <p className="mt-1.5 text-xs text-slate-500 font-medium truncate max-w-xs">
+              {loginCelebration.subtitle || user?.email || "Welcome back to your dashboard"}
+            </p>
+
+            {/* Simple Loading Indicator */}
+            <div className="mt-6 flex items-center gap-2 text-[11px] font-semibold text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Opening your habit dashboard...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={`min-h-screen max-w-[1600px] mx-auto transition-all duration-300 relative ${
+        loginCelebration?.active ? "filter blur-sm scale-[0.995] pointer-events-none select-none" : "filter-none"
+      } ${
+        isBeastMode ? "ring-4 ring-rose-500/80 shadow-[0_0_50px_rgba(244,63,94,0.4)]" : ""
+      } ${
+        isDark ? "bg-[#000000]" : "bg-[#F2F2F7]"
+      }`}>
+        {/* Floating Interactive Toast */}
+        {toastMessage && (
+          <div className={`fixed top-6 left-1/2 -translate-x-1/2 text-xs font-bold py-3 px-5 rounded-full shadow-2xl backdrop-blur-xl flex items-center gap-2.5 z-50 border animate-slide-down ${
+            isDark ? "bg-[#1C1C1E]/90 text-white border-white/10" : "bg-white/90 text-slate-900 border-slate-200/80"
+          }`}>
+            <LucideIcon name="Sparkles" size={13} className="text-[#007AFF] animate-spin-slow" />
             <span>{toastMessage}</span>
           </div>
         )}
 
         {/* Master Workspace Content Area - Full Width */}
-        <main className={`w-full p-3.5 sm:p-5 lg:p-6 flex flex-col min-h-screen transition-colors duration-300 ${
-          isDark ? "bg-slate-950" : "bg-[#F8FAFC]"
+        <main className={`flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-3.5 sm:py-5 pb-28 sm:pb-32 flex flex-col min-h-screen transition-colors duration-300 relative ${
+          isDark ? "bg-[#000000]" : "bg-[#F2F2F7]"
         }`}>
           
           {/* Header */}
@@ -638,19 +993,12 @@ export default function App() {
             onNotificationClick={handleNotificationClick}
             onOpenAICoach={() => setIsAICoachOpen(true)}
             user={user}
-            onSignInWithGoogle={async () => {
-              try {
-                await loginWithGoogle();
-                triggerToast("Google Sign-In successful!");
-              } catch (err: any) {
-                triggerToast(err?.message || "Google Sign-In failed.");
-              }
+            onOpenAuthModal={() => {
+              setAuthModalMode("login");
+              setIsAuthModalOpen(true);
             }}
-            onSignOut={async () => {
-              await logoutUser();
-              setUser(null);
-              triggerToast("Signed out successfully.");
-            }}
+            onSignOut={handleSignOut}
+            onGoToLanding={() => setShowLandingPage(true)}
             onResetProgress={handleResetProgress}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
@@ -707,7 +1055,7 @@ export default function App() {
                         : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-850"
                     }`}
                   >
-                    <LucideIcon name="Bell" size={12} strokeWidth={2.5} />
+                    <LucideIcon name="Clock" size={12} strokeWidth={2.5} />
                     <span>Reminders</span>
                   </button>
                   <button
@@ -804,14 +1152,14 @@ export default function App() {
 
               {/* Grid of Habit Studio Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {habits.map((habit) => {
+                {habits.map((habit, habitIndex) => {
                   const completedDays = habit.days.filter(d => d === "completed").length;
                   const totalDays = habit.days.length;
                   const completionPercentage = Math.round((completedDays / totalDays) * 100);
 
                   return (
                     <div 
-                      key={habit.id}
+                      key={habit.id ? `studio-${habit.id}-${habitIndex}` : `studio-${habitIndex}`}
                       className={`rounded-2xl border p-5 shadow-xs hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative overflow-hidden ${
                         isDark ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
                       }`}
@@ -832,7 +1180,7 @@ export default function App() {
                           <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border shadow-xs font-mono text-[9px] font-extrabold ${
                             isDark ? "bg-amber-950/30 border-amber-900/60 text-amber-500" : "bg-amber-50 border-amber-100 text-amber-600"
                           }`}>
-                            <LucideIcon name="Flame" size={11} className="animate-pulse" />
+                            <LucideIcon name="Zap" size={11} className="animate-pulse" />
                             <span>{habit.streak}d</span>
                           </div>
 
@@ -933,6 +1281,7 @@ export default function App() {
           ) : activeTab === "account" ? (
             <AccountView
               isDark={isDark}
+              setIsDark={setIsDark}
               theme={theme}
               setTheme={setTheme}
               colorTheme={colorTheme}
@@ -944,8 +1293,10 @@ export default function App() {
             <SignOutView
               isDark={isDark}
               onSignIn={() => {
+                setAuthModalMode("login");
                 setIsAuthModalOpen(true);
               }}
+              onGoToLanding={() => setShowLandingPage(true)}
               triggerToast={triggerToast}
             />
           ) : (
@@ -988,30 +1339,7 @@ export default function App() {
           user={user}
         />
 
-        {/* Floating AI Coach FAB Button */}
-        <div id="sabit-ai-coach-fab" className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={() => setIsAICoachOpen(!isAICoachOpen)}
-            className="group relative flex items-center justify-center h-14 w-14 bg-gradient-to-tr from-[#2563EB] to-[#7C3AED] hover:from-[#1D4ED8] hover:to-[#6D28D9] text-white rounded-full shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer ring-4 ring-white"
-            title="Toggle Sabit AI Success Coach"
-          >
-            <span className="absolute -inset-1 rounded-full bg-gradient-to-tr from-[#2563EB] to-[#7C3AED] opacity-40 blur-xs animate-pulse group-hover:scale-110 transition-all duration-300" />
-            
-            <div className="relative z-10">
-              {isAICoachOpen ? (
-                <LucideIcon name="X" size={24} strokeWidth={2.5} />
-              ) : (
-                <LucideIcon name="Bot" size={24} strokeWidth={2.5} />
-              )}
-            </div>
 
-            {!isAICoachOpen && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[8px] font-extrabold text-white shadow-sm ring-2 ring-white">
-                1
-              </span>
-            )}
-          </button>
-        </div>
 
         {/* Create/Edit Habit Modal */}
         <HabitModal
@@ -1036,10 +1364,70 @@ export default function App() {
         {/* Firebase Authentication Modal */}
         <AuthModal
           isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            setAuthModalUnverifiedEmail(undefined);
+          }}
           isDark={isDark}
-          onSuccess={(msg) => triggerToast(msg)}
+          onSuccess={(msg) => {
+            triggerLoginCelebration("Logged in successfully", user?.email || msg || "Welcome to Gammy!");
+            triggerToast(msg);
+            setIsAuthModalOpen(false);
+          }}
+          initialMode={authModalMode}
+          initialUnverifiedEmail={authModalUnverifiedEmail}
         />
+
+        {/* Floating iOS Bottom Navigation Bar */}
+        <IOSBottomTabBar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isDark={isDark}
+          onOpenAddHabit={handleOpenAddHabit}
+        />
+
+        {/* Reset All Habits Confirmation Modal */}
+        {isResetConfirmModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className={`w-full max-w-sm p-6 rounded-3xl border shadow-2xl transition-all ${
+              isDark ? "bg-[#1C1C1E] border-white/10 text-white" : "bg-white border-slate-200 text-slate-900"
+            }`}>
+              <div className="flex items-center gap-3.5 mb-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center justify-center shrink-0">
+                  <LucideIcon name="AlertTriangle" size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold tracking-tight">Reset All Habits?</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Start fresh with an empty ledger</p>
+                </div>
+              </div>
+
+              <p className={`text-xs leading-relaxed mb-6 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                Are you sure you want to reset all habits? This will remove all your current habits and checkmarks so you can start from the beginning by creating your own custom habits.
+              </p>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsResetConfirmModalOpen(false)}
+                  className={`py-2.5 px-4 text-xs font-semibold rounded-xl border transition-all cursor-pointer text-center ${
+                    isDark ? "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" : "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmResetAllHabits}
+                  className="py-2.5 px-4 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <LucideIcon name="RotateCcw" size={13} />
+                  <span>Reset All</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

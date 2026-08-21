@@ -48,30 +48,35 @@ export const RightPanels: React.FC<RightPanelsProps> = ({
       className="flex flex-col h-full"
     >
       {/* PANEL: Upcoming Reminders */}
-      <div className={`rounded-2xl p-5 border transition-all duration-300 flex flex-col h-[380px] justify-between ${
+      <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-5 border transition-all duration-300 flex flex-col h-auto lg:h-[380px] justify-between ${
         isDark 
-          ? "bg-slate-900 border-slate-800 text-white shadow-[0_4px_20px_rgba(0,0,0,0.3)]" 
-          : "bg-white border-[#E5E7EB] shadow-[0_4px_20px_rgba(15,23,42,0.03)]"
+          ? "bg-[#1C1C1E] border-white/10 text-white shadow-sm" 
+          : "bg-white border-slate-200/60 shadow-xs"
       }`}>
-        {/* Header - Cleaned up (no black horizontal border underneath) */}
-        <div className="flex items-center justify-between mb-4 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <h4 className={`font-black text-xs tracking-tight ${isDark ? "text-slate-100" : "text-slate-800"}`}>Upcoming Reminders</h4>
+        {/* Header - iOS Reminders Style */}
+        <div className="flex items-center justify-between mb-3.5 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className={`p-1.5 rounded-full ${
+              isDark ? "bg-[#007AFF]/20 text-[#007AFF]" : "bg-blue-50 text-[#007AFF]"
+            }`}>
+              <LucideIcon name="Bell" size={14} />
+            </div>
+            <h4 className={`font-bold text-sm tracking-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}>Today's Reminders</h4>
           </div>
-          <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${
-            isDark ? "bg-slate-800 border-slate-700 text-slate-400" : "bg-slate-50 border-[#E5E7EB] text-[#64748B]"
+          <span className={`text-[10px] font-bold tracking-tight px-2.5 py-0.5 rounded-full border ${
+            isDark ? "bg-white/10 border-white/10 text-slate-300" : "bg-slate-100 border-slate-200/80 text-slate-600"
           }`}>
-            Today
+            {sortedHabits.filter(h => h.days && h.days[todayIdx] === "completed").length}/{sortedHabits.length} Done
           </span>
         </div>
 
-        {/* Checklist Container */}
-        <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 custom-scrollbar min-h-0">
+        {/* Checklist Container - auto height on mobile without internal scroll */}
+        <div className="flex-1 overflow-y-visible lg:overflow-y-auto pr-0 lg:pr-1 space-y-2 custom-scrollbar min-h-0">
           {sortedHabits.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-4">
-              <LucideIcon name="CheckCircle" size={24} className="text-slate-400 opacity-60 mb-2" />
-              <p className="text-xs font-bold text-slate-400">No active habits registered.</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Add some habits to see reminders.</p>
+              <LucideIcon name="CheckCircle" size={24} className="text-blue-500 mb-2" />
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200">No active habits registered.</p>
+              <p className="text-[10px] text-slate-600 dark:text-slate-300 mt-0.5">Add some habits to see reminders.</p>
             </div>
           ) : (
             sortedHabits.map((habit) => {
@@ -82,14 +87,14 @@ export const RightPanels: React.FC<RightPanelsProps> = ({
                 <div
                   key={habit.id}
                   onClick={() => onToggleDay(habit.id, todayIdx, isCompleted ? "locked" : "completed")}
-                  className={`flex items-center justify-between py-2.5 px-3.5 rounded-xl transition-all duration-300 cursor-pointer select-none ${
+                  className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-all duration-200 cursor-pointer select-none border ${
                     isCompleted
                       ? isDark 
-                        ? "bg-emerald-950/10 text-slate-400" 
-                        : "bg-emerald-50/25 text-slate-500"
+                        ? "bg-emerald-950/40 border-emerald-800 text-slate-300" 
+                        : "bg-emerald-50 border-emerald-200 text-slate-700"
                       : isDark 
-                        ? "bg-slate-900 hover:bg-slate-850 text-slate-200" 
-                        : "bg-slate-50/40 hover:bg-slate-50 text-slate-700"
+                        ? "bg-slate-900 hover:bg-slate-850 border-slate-800 text-slate-100" 
+                        : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-900"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -97,8 +102,8 @@ export const RightPanels: React.FC<RightPanelsProps> = ({
                     <div
                       className={`h-4.5 w-4.5 rounded-md flex items-center justify-center transition-all border shrink-0 ${
                         isCompleted
-                          ? "bg-emerald-500 border-emerald-500 text-white"
-                          : isDark ? "bg-slate-950 border-slate-800 text-transparent" : "bg-white border-slate-200 text-transparent"
+                          ? "bg-emerald-500 border-emerald-500 text-white shadow-xs"
+                          : isDark ? "bg-slate-950 border-slate-700 text-transparent hover:border-blue-500" : "bg-white border-slate-300 text-transparent hover:border-blue-500"
                       }`}
                     >
                       <LucideIcon name="Check" size={10} strokeWidth={3} />
@@ -111,43 +116,43 @@ export const RightPanels: React.FC<RightPanelsProps> = ({
                       >
                         <LucideIcon name={habit.iconName || "Activity"} size={11} />
                       </div>
-                      <div className="flex flex-col min-w-0 leading-none">
+                      <div className="flex flex-col min-w-0 leading-tight">
                         <span
-                          className={`text-[11px] font-bold truncate transition-all ${
+                          className={`text-[11px] font-black truncate transition-all ${
                             isCompleted
-                              ? "text-slate-400 line-through font-semibold"
-                              : isDark ? "text-slate-200" : "text-slate-800"
+                              ? "text-slate-500 dark:text-slate-400 line-through font-bold"
+                              : isDark ? "text-white" : "text-slate-950"
                           }`}
                         >
                           {habit.name}
                         </span>
-                        <span className="text-[8.5px] text-slate-400 font-mono mt-0.5">
+                        <span className="text-[9px] text-slate-600 dark:text-slate-300 font-bold font-mono">
                           {time}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Action Button: 'OK' or Professional completion badge sticker */}
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Action Button: 'Mark Done' or 'Completed' status */}
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
                     {!isCompleted ? (
                       <button
                         onClick={(e) => {
-                          e.stopPropagation(); // Prevent duplicate clicks on parent div
+                          e.stopPropagation();
                           onToggleDay(habit.id, todayIdx, "completed");
                         }}
-                        className={`px-2.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all duration-200 border cursor-pointer ${
+                        className={`px-2.5 py-1 rounded-lg text-[9.5px] font-black transition-all duration-200 border cursor-pointer ${
                           isDark 
-                            ? "bg-blue-950/40 border-blue-900/50 text-blue-400 hover:bg-blue-900 hover:text-white" 
-                            : "bg-blue-50 border-blue-100 text-blue-600 hover:bg-blue-600 hover:text-white"
+                            ? "bg-slate-800 border-slate-700 text-slate-100 hover:bg-blue-600 hover:text-white hover:border-blue-500" 
+                            : "bg-white border-slate-300 text-slate-900 hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-2xs"
                         }`}
                       >
-                        OK
+                        Mark Done
                       </button>
                     ) : (
-                      <div className={`flex items-center gap-1 bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 text-[8px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded-md border border-emerald-500/20 rotate-[-2deg] shadow-xs select-none animate-fade-in`}>
-                        <LucideIcon name="CheckCircle" size={9} strokeWidth={3} className="text-emerald-500" />
-                        <span>{currentMonth.substring(0, 3).toUpperCase()} {currentDay} OK</span>
+                      <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 text-[10px] font-black select-none">
+                        <LucideIcon name="CheckCircle2" size={12} strokeWidth={2.5} className="text-emerald-500" />
+                        <span>Done {currentMonth.substring(0, 3)} {currentDay}</span>
                       </div>
                     )}
                   </div>

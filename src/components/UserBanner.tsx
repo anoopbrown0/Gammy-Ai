@@ -251,7 +251,7 @@ export const UserBanner: React.FC = () => {
         )}
       </div>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
         <div className="flex items-center gap-4">
           
           {/* Uploadable Avatar Area */}
@@ -260,8 +260,8 @@ export const UserBanner: React.FC = () => {
             onDragOver={(e) => { e.stopPropagation(); e.preventDefault(); setIsDraggingAvatar(true); }}
             onDragLeave={() => setIsDraggingAvatar(false)}
             onDrop={(e) => { e.stopPropagation(); e.preventDefault(); setIsDraggingAvatar(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { handleProfileUpload(e.dataTransfer.files[0]); } }}
-            className={`relative h-14 w-14 rounded-2xl cursor-pointer overflow-hidden transition-all duration-200 select-none group shrink-0 ${
-              isDraggingAvatar ? "ring-2 ring-blue-400 scale-105" : "hover:scale-[1.02]"
+            className={`relative h-16 w-16 rounded-2xl cursor-pointer overflow-hidden transition-all duration-300 select-none group shrink-0 ring-2 ring-white/20 shadow-lg ${
+              isDraggingAvatar ? "ring-4 ring-blue-400 scale-105" : "hover:scale-[1.03]"
             }`}
             title="Click or drag an image here to update your profile photo"
           >
@@ -273,21 +273,21 @@ export const UserBanner: React.FC = () => {
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="h-full w-full bg-gradient-to-tr from-[#2563EB] to-[#7C3AED] flex items-center justify-center text-white text-lg font-bold shadow-md shadow-blue-500/10">
-                {profileName === "Anoop Brown" ? "AB" : "AS"}
+              <div className="h-full w-full bg-gradient-to-tr from-[#2563EB] via-[#4F46E5] to-[#7C3AED] flex items-center justify-center text-white text-xl font-black shadow-md">
+                {profileName.split(" ").map(n => n[0]).join("").slice(0, 2) || "AB"}
               </div>
             )}
             
             {/* Hover Camera Overlay */}
-            <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[8px] font-bold gap-1 text-white">
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[8px] font-extrabold tracking-wider gap-0.5 text-white">
               <LucideIcon name="Camera" size={14} className="text-white" />
-              <span>AVATAR</span>
+              <span>CHANGE</span>
             </div>
           </div>
  
           <div>
             {/* Top Heading Badge */}
-            <div className="mb-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
               {isEditingHeading ? (
                 <div className="flex items-center gap-1.5">
                   <input
@@ -307,7 +307,7 @@ export const UserBanner: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="inline-flex items-center gap-1 bg-blue-950/70 border border-blue-800/80 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-widest text-blue-300 backdrop-blur-xs group/bannerhead">
+                <div className="inline-flex items-center gap-1 bg-blue-500/20 border border-blue-400/30 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest text-blue-200 backdrop-blur-md group/bannerhead">
                   <span onClick={() => setIsEditingHeading(true)} className="cursor-pointer hover:underline">{topHeading}</span>
                   <button
                     type="button"
@@ -319,21 +319,26 @@ export const UserBanner: React.FC = () => {
                   </button>
                 </div>
               )}
+
+              <span className="inline-flex items-center gap-1 bg-emerald-500/20 border border-emerald-400/30 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-emerald-300 backdrop-blur-md">
+                <LucideIcon name="Zap" size={11} className="text-emerald-400 fill-emerald-400" />
+                <span>Unstoppable Momentum</span>
+              </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm sm:text-base font-bold tracking-tight text-white drop-shadow-sm">{profileName}</h2>
-              <span className="bg-[#2563EB]/40 border border-[#2563EB]/60 text-[8px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider text-blue-200">
-                {profileName === "Anoop Brown" ? "Master Architect" : "Peak Performer"}
+              <h2 className="text-base sm:text-lg font-black tracking-tight text-white drop-shadow-sm">{profileName}</h2>
+              <span className="bg-blue-600/30 border border-blue-400/40 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-blue-100 backdrop-blur-md">
+                Master Architect
               </span>
-              <span className="bg-slate-900/50 border border-slate-750 text-[8px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider text-slate-200 flex items-center gap-1 backdrop-blur-xs">
+              <span className="bg-white/10 border border-white/15 text-[9px] font-bold px-2.5 py-0.5 rounded-full text-slate-200 flex items-center gap-1 backdrop-blur-md">
                 <LucideIcon name="MapPin" size={10} className="text-blue-300" />
                 <span>{profileLocation}</span>
               </span>
               {profileImage && (
                 <button
                   onClick={handleResetAvatar}
-                  className="text-[9px] font-medium text-slate-300 hover:text-red-400 transition-colors flex items-center gap-1 bg-slate-900/40 hover:bg-slate-900/80 px-2 py-0.5 rounded-lg border border-slate-700/50"
+                  className="text-[9px] font-medium text-slate-300 hover:text-red-300 transition-colors flex items-center gap-1 bg-black/20 hover:bg-black/40 px-2 py-0.5 rounded-full border border-white/10"
                   title="Reset profile picture to default initials avatar"
                 >
                   <LucideIcon name="User" size={9} />
@@ -341,24 +346,32 @@ export const UserBanner: React.FC = () => {
                 </button>
               )}
             </div>
-            <p className="text-slate-200 text-xs mt-1 leading-relaxed max-w-xl font-medium drop-shadow-sm">
-              {profileBio}
+            <p className="text-slate-200 text-xs mt-1.5 leading-relaxed max-w-xl font-medium drop-shadow-sm">
+              "{profileBio}"
             </p>
           </div>
         </div>
 
-        {/* User stats overview inside the banner */}
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6 border-t md:border-t-0 md:border-l border-white/20 pt-4 md:pt-0 md:pl-6 shrink-0 z-10 bg-slate-900/10 md:bg-transparent rounded-xl p-3 md:p-0">
-          <div>
-            <span className="text-[9px] text-slate-300 font-semibold uppercase tracking-wider block">Consistency Tier</span>
-            <span className="text-xs font-bold text-blue-300 mt-0.5 block drop-shadow-sm">Level 12 Veteran</span>
+        {/* User stats overview inside the banner with motivational layout */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0 z-10">
+          <div className="bg-white/10 border border-white/15 backdrop-blur-md rounded-2xl p-3 flex items-center gap-3 min-w-[125px]">
+            <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-400/30 text-amber-300">
+              <LucideIcon name="Zap" size={18} className="animate-pulse" />
+            </div>
+            <div>
+              <span className="text-[9px] text-slate-300 font-bold uppercase tracking-wider block">Daily Streak</span>
+              <span className="text-sm font-black text-amber-300 block drop-shadow-sm">17 Days</span>
+            </div>
           </div>
-          <div>
-            <span className="text-[9px] text-slate-300 font-semibold uppercase tracking-wider block">Daily Active Streak</span>
-            <span className="text-xs font-bold text-amber-300 mt-0.5 flex items-center gap-1 drop-shadow-sm">
-              <span>17 Days</span>
-              <LucideIcon name="Flame" size={12} className="text-amber-400 animate-pulse" />
-            </span>
+
+          <div className="bg-white/10 border border-white/15 backdrop-blur-md rounded-2xl p-3 flex items-center gap-3 min-w-[125px]">
+            <div className="p-2 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-300">
+              <LucideIcon name="Trophy" size={18} />
+            </div>
+            <div>
+              <span className="text-[9px] text-slate-300 font-bold uppercase tracking-wider block">Level Status</span>
+              <span className="text-sm font-black text-blue-200 block drop-shadow-sm">Level 12</span>
+            </div>
           </div>
         </div>
       </div>
