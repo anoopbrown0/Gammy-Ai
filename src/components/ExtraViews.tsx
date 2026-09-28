@@ -214,23 +214,29 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({
 interface AccountViewProps {
   isDark: boolean;
   setIsDark: (dark: boolean) => void;
+  isGlassMode?: boolean;
+  setIsGlassMode?: (glass: boolean) => void;
   theme: "light" | "dark" | "system";
   setTheme: (theme: "light" | "dark" | "system") => void;
   colorTheme: string;
   setColorTheme: (theme: string) => void;
   onReturn: () => void;
   triggerToast: (msg: string) => void;
+  onOpenPaymentModal?: () => void;
 }
 
 export const AccountView: React.FC<AccountViewProps> = ({
   isDark,
   setIsDark,
+  isGlassMode = true,
+  setIsGlassMode,
   theme,
   setTheme,
   colorTheme,
   setColorTheme,
   onReturn,
   triggerToast,
+  onOpenPaymentModal,
 }) => {
   const [userName, setUserName] = useState(() => {
     return localStorage.getItem("sabit_profile_name") || "User";
@@ -507,7 +513,7 @@ export const AccountView: React.FC<AccountViewProps> = ({
                       }}
                       className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-semibold transition-all cursor-pointer ${
                         isSelected
-                          ? "bg-[#007AFF] text-white border-[#007AFF] shadow-sm"
+                          ? "bg-[#007AFF] text-white border-[#007AFF] shadow-sm font-bold"
                           : isDark
                             ? "bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800"
                             : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
@@ -520,6 +526,40 @@ export const AccountView: React.FC<AccountViewProps> = ({
                 })}
               </div>
             </div>
+
+            {/* Clean Glassmorphism Mode Toggle */}
+            {setIsGlassMode && (
+              <div className="space-y-2 mb-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>Clean Glassmorphism UI</span>
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                        Trending 2026
+                      </span>
+                    </label>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Frosted glass backdrop blur, luminous glows, and clean aesthetic.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !isGlassMode;
+                      setIsGlassMode(next);
+                      triggerToast(next ? "Enabled Clean Glassmorphism UI." : "Switched to Solid UI.");
+                    }}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      isGlassMode ? "bg-cyan-500" : "bg-slate-300 dark:bg-slate-700"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                        isGlassMode ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Accent Colors */}
             <div className="space-y-2">
@@ -554,6 +594,75 @@ export const AccountView: React.FC<AccountViewProps> = ({
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+
+          {/* Membership & Payment Gateway Card */}
+          <div className={`p-6 rounded-2xl border transition-all ${
+            isDark ? "bg-slate-900/90 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900 shadow-xs"
+          }`}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <LucideIcon name="CreditCard" size={16} className="text-amber-500" />
+                <span>Membership & Billing</span>
+              </h2>
+              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                UPI & Card
+              </span>
+            </div>
+
+            <div className={`p-4 rounded-xl border mb-4 flex items-center justify-between ${
+              isDark ? "bg-slate-800/40 border-slate-700/60" : "bg-slate-50 border-slate-200/80"
+            }`}>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black">Lifetime Pro Pass (₹299)</span>
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-md bg-emerald-500/20 text-emerald-400">
+                    Active
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Permanent access forever with full AI Coach, cloud sync, and 7-day refund guarantee.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-[11px]">
+              <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                isDark ? "border-slate-800 bg-slate-900/60" : "border-slate-100 bg-slate-50/60"
+              }`}>
+                <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-[10px]">
+                  UPI
+                </div>
+                <div>
+                  <span className="font-bold block truncate">UPI Instant</span>
+                  <span className="text-[9px] text-slate-400 truncate block">GPay/PhonePe</span>
+                </div>
+              </div>
+
+              <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                isDark ? "border-slate-800 bg-slate-900/60" : "border-slate-100 bg-slate-50/60"
+              }`}>
+                <div className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                  <LucideIcon name="CreditCard" size={12} />
+                </div>
+                <div>
+                  <span className="font-bold block truncate">Credit Cards</span>
+                  <span className="text-[9px] text-slate-400 truncate block">Visa/Mastercard</span>
+                </div>
+              </div>
+
+              <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                isDark ? "border-slate-800 bg-slate-900/60" : "border-slate-100 bg-slate-50/60"
+              }`}>
+                <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <LucideIcon name="ShieldCheck" size={12} />
+                </div>
+                <div>
+                  <span className="font-bold block truncate">7-Day Refund</span>
+                  <span className="text-[9px] text-slate-400 truncate block">100% Policy</span>
+                </div>
               </div>
             </div>
           </div>

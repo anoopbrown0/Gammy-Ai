@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-serif: "Playfair Display", Georgia, Cambria, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
@@ -14,6 +14,156 @@
   #root {
     zoom: 0.93;
   }
+}
+
+/* Glassmorphism 2026 High-End Visual Utilities */
+.glass-mode {
+  --glass-blur: 24px;
+}
+
+/* Light mode glass panels */
+.glass-mode:not(.dark) header#sabit-header,
+.glass-mode:not(.dark) #sabit-habit-tracker-container,
+.glass-mode:not(.dark) #sabit-right-panels-stack > div,
+.glass-mode:not(.dark) #progress-chart-card,
+.glass-mode:not(.dark) .metric-card-box,
+.glass-mode:not(.dark) .habit-studio-card,
+.glass-mode:not(.dark) #sabit-user-banner,
+.glass-mode:not(.dark) nav#sabit-bottom-nav {
+  background: rgba(255, 255, 255, 0.76) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border-color: rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.9) inset !important;
+}
+
+/* Dark mode glass panels */
+.glass-mode.dark header#sabit-header,
+.glass-mode.dark #sabit-habit-tracker-container,
+.glass-mode.dark #sabit-right-panels-stack > div,
+.glass-mode.dark #progress-chart-card,
+.glass-mode.dark .metric-card-box,
+.glass-mode.dark .habit-studio-card,
+.glass-mode.dark #sabit-user-banner,
+.glass-mode.dark nav#sabit-bottom-nav {
+  background: rgba(15, 23, 42, 0.72) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 14px 45px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+}
+
+/* Glass ambient glow balls */
+.glass-ambient-orbs {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.glass-orb-1 {
+  position: absolute;
+  top: -80px;
+  right: 15%;
+  width: 520px;
+  height: 520px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.22) 0%, rgba(99, 102, 241, 0.08) 50%, transparent 70%);
+  filter: blur(80px);
+}
+
+.glass-orb-2 {
+  position: absolute;
+  top: 40%;
+  left: -80px;
+  width: 480px;
+  height: 480px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.18) 0%, rgba(236, 72, 153, 0.06) 50%, transparent 70%);
+  filter: blur(85px);
+}
+
+.glass-orb-3 {
+  position: absolute;
+  bottom: 5%;
+  right: 5%;
+  width: 500px;
+  height: 500px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.18) 0%, rgba(59, 130, 246, 0.06) 50%, transparent 70%);
+  filter: blur(90px);
+}
+
+/* High-End Architectural Grid Patterns for Clean, Attractive Surfaces */
+.bg-grid-narrow {
+  background-size: 20px 20px;
+  background-image: 
+    linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+}
+
+.dark .bg-grid-narrow {
+  background-size: 20px 20px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+}
+
+.bg-grid-subtle {
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+}
+
+.dark .bg-grid-subtle {
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+/* Apple Style Clean Glassmorphism Utility */
+.apple-glass {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(22px) saturate(190%);
+  -webkit-backdrop-filter: blur(22px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 30px 0 rgba(0, 0, 0, 0.04), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+
+.dark .apple-glass {
+  background: rgba(15, 21, 35, 0.72);
+  backdrop-filter: blur(26px) saturate(190%);
+  -webkit-backdrop-filter: blur(26px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+}
+
+.bg-grid-dense {
+  background-size: 20px 20px;
+  background-image: 
+    linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+}
+
+.dark .bg-grid-dense {
+  background-size: 20px 20px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+}
+
+/* Radiant Radial Vignette Mask so grid fades gracefully outward */
+.radial-fade-grid {
+  mask-image: radial-gradient(ellipse 85% 70% at 50% 25%, #000 35%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 70% at 50% 25%, #000 35%, transparent 100%);
+}
+
+.radial-fade-bottom {
+  mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
 }
 
 /* Custom Minimal Scrollbar Utilities */
@@ -57,6 +207,21 @@
   0%, 100% { transform: rotate(0deg); }
   25% { transform: rotate(-8deg); }
   75% { transform: rotate(10deg); }
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-zoom-in {
+  animation: zoomIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes pulseSoft {
@@ -209,6 +374,29 @@
 
 .text-blue-200 {
   color: var(--sabit-primary-dark) !important;
+}
+
+/* Minimalist Theme-Adaptive Glassmorphism Card Utility */
+.minimal-glass-card {
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+}
+
+.dark .minimal-glass-card {
+  background: linear-gradient(175deg, rgba(28, 28, 30, 0.88) 0%, rgba(18, 18, 20, 0.94) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
+}
+
+:not(.dark) .minimal-glass-card {
+  background: linear-gradient(175deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.98) 100%);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 
+    0 20px 40px -10px rgba(0, 0, 0, 0.08),
+    0 4px 12px -2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 0 rgba(255, 255, 255, 1);
 }
 
 

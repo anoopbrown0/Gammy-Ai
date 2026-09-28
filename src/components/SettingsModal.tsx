@@ -6,8 +6,11 @@ interface SettingsModalProps {
   onClose: () => void;
   isDark: boolean;
   setIsDark: (val: boolean) => void;
+  isGlassMode?: boolean;
+  setIsGlassMode?: (val: boolean) => void;
   onResetProgress: () => void;
   onDeleteAllHabits: () => void;
+  onOpenPaymentModal?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -15,14 +18,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   isDark,
   setIsDark,
+  isGlassMode = true,
+  setIsGlassMode,
   onResetProgress,
   onDeleteAllHabits,
+  onOpenPaymentModal,
 }) => {
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [showTips, setShowTips] = useState(true);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const fileImportRef = React.useRef<HTMLInputElement>(null);
+
+  const handleExportLifelongLedger = () => {
+    try {
+      const habits = localStorage.getItem("gammy_lifelong_habits_master") || localStorage.getItem("sabit_habits_master") || "[]";
+      const logs = localStorage.getItem("gammy_lifelong_logs_master") || localStorage.getItem("sabit_all_logs_master") || "[]";
+      const data = {
+        exportDate: new Date().toISOString(),
+        appName: "Gammy Habit Tracker",
+        version: "2026.1",
+        habits: JSON.parse(habits),
+        logs: JSON.parse(logs)
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `gammy_lifelong_habits_${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      window.dispatchEvent(new CustomEvent("sabit_trigger_toast", { detail: "Lifelong habit ledger exported successfully!" }));
+    } catch (err) {
+      console.error(err);
+      window.dispatchEvent(new CustomEvent("sabit_trigger_toast", { detail: "Failed to export data." }));
+    }
+  };
+
+  const handleImportLifelongLedger = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (parsed.habits && Array.isArray(parsed.habits)) {
+          localStorage.setItem("gammy_lifelong_habits_master", JSON.stringify(parsed.habits));
+          localStorage.setItem("sabit_habits_master", JSON.stringify(parsed.habits));
+        }
+        if (parsed.logs && Array.isArray(parsed.logs)) {
+          localStorage.setItem("gammy_lifelong_logs_master", JSON.stringify(parsed.logs));
+          localStorage.setItem("sabit_all_logs_master", JSON.stringify(parsed.logs));
+        }
+        window.dispatchEvent(new CustomEvent("sabit_trigger_toast", { detail: "Lifelong ledger imported and restored! Reloading..." }));
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (err) {
+        alert("Invalid backup JSON file.");
+      }
+    };
+    reader.readAsText(file);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -94,6 +150,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSave} className="space-y-4 mt-4">
+          {/* Pro Membership Banner with UPI & Card */}
+          {onOpenPaymentModal && (
+            <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+              isDark 
+                ? "bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border-amber-500/30" 
+                : "bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200"
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <LucideIcon name="CreditCard" size={15} strokeWidth={2.4} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black">Gammy Pro Membership</span>
+                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400">
+                      UPI & Card
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 block">
+                    Instant GPay, PhonePe, Paytm, or Credit Card checkout
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenPaymentModal();
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white shadow-xs transition-all cursor-pointer active:scale-95 shrink-0"
+              >
+                Upgrade
+              </button>
+            </div>
+          )}
+
           {/* User Settings Row */}
           <div>
             <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1.5 pl-1 ${
@@ -138,6 +230,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className={`p-3 rounded-xl border space-y-3 ${isDark ? "bg-slate-900/45 border-slate-800/80" : "bg-slate-50 border-slate-100"}`}>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Preferences</span>
             
+            {/* Clean Glassmorphism Mode Toggle option */}
+            {setIsGlassMode && (
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold">Clean Glassmorphism UI</span>
+                    <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                      2026 Style
+                    </span>
+                  </div>
+                  <span className="text-[9px] text-slate-400">Frosted glass backdrop blur, luminous glows, and sleek minimal aesthetics.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsGlassMode(!isGlassMode)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isGlassMode ? "bg-cyan-500" : "bg-slate-300"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      isGlassMode ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
             {/* Theme Toggle option */}
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
@@ -178,6 +298,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   }`}
                 />
               </button>
+            </div>
+          </div>
+
+          {/* Lifelong Cloud Ledger & Data Protection */}
+          <div className={`p-3 rounded-xl border space-y-2.5 ${isDark ? "bg-blue-950/20 border-blue-900/40" : "bg-blue-50/40 border-blue-100"}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider block">Lifelong Data Persistence</span>
+              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Cloud & Local Sync Active</span>
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              Your habits, check-ins, and streaks are continuously synchronized to Firestore Cloud and multi-layer local master storage for lifelong durability.
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleExportLifelongLedger}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <LucideIcon name="Download" size={11} />
+                <span>Export Ledger (JSON)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileImportRef.current?.click()}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer ${
+                  isDark ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <LucideIcon name="Upload" size={11} />
+                <span>Restore Backup</span>
+              </button>
+              <input
+                type="file"
+                ref={fileImportRef}
+                onChange={handleImportLifelongLedger}
+                accept=".json"
+                className="hidden"
+              />
             </div>
           </div>
 

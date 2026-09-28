@@ -412,43 +412,73 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 
 export async function migrateGuestDataToUserIfNeeded(userId: string) {
   if (!userId || !isFirebaseEnabled || !db) return;
-  const migrationKey = `sabit_seeded_${userId}`;
-  if (localStorage.getItem(migrationKey) === "true") return;
 
   try {
-    // Check if Firestore user already has habits
+    // 1. Check if Firestore user already has habits
     const habitsCol = collection(db, "users", userId, "habits");
     const snap = await getDocs(habitsCol);
-    if (!snap.empty) {
-      localStorage.setItem(migrationKey, "true");
-      return;
+    
+    // Check if user has existing custom habits stored locally
+    let localHabits: any[] = [];
+    try {
+      const rawUserHabits = localStorage.getItem(`sabit_user_habits_${userId}`) || localStorage.getItem(LIFELONG_HABITS_KEY);
+      if (rawUserHabits) {
+        const parsed = JSON.parse(rawUserHabits);
+        if (Array.isArray(parsed) && parsed.length > 0) localHabits = parsed;
+      }
+    } catch (_) {}
+
+    if (snap.empty) {
+      // New user with no habits in cloud: seed with local habits if available, or default clean template
+      const habitsToSeed = localHabits.length > 0 ? localHabits : initialHabits;
+
+      for (const habit of habitsToSeed) {
+        const habitId = habit.id || `h_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const now = new Date().toISOString();
+        await setDoc(doc(db, "users", userId, "habits", habitId), {
+          id: habitId,
+          name: habit.name || "Untitled Habit",
+          icon: habit.iconName || habit.icon || "Target",
+          iconName: habit.iconName || habit.icon || "Target",
+          color: habit.color || "#2563EB",
+          category: habit.category || "habit",
+          goal: habit.goal || "1x / day",
+          frequency: habit.frequency || "daily",
+          reminderTime: habit.reminderTime || "09:00",
+          active: habit.active !== false,
+          createdAt: now,
+          updatedAt: now
+        }, { merge: true });
+      }
     }
 
-    // New user with no habits in cloud: seed with default clean template
-    const habitsToSeed = initialHabits;
-
-    for (const habit of habitsToSeed) {
-      const habitId = habit.id || `h_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const now = new Date().toISOString();
-      await setDoc(doc(db, "users", userId, "habits", habitId), {
-        id: habitId,
-        name: habit.name || "Untitled Habit",
-        icon: habit.iconName || "Target",
-        iconName: habit.iconName || "Target",
-        color: habit.color || "#2563EB",
-        category: habit.category || "habit",
-        goal: habit.goal || "1x / day",
-        frequency: habit.frequency || "daily",
-        reminderTime: habit.reminderTime || "09:00",
-        active: habit.active !== false,
-        createdAt: now,
-        updatedAt: now
-      });
+    // 2. Also back up all existing local logs into Firestore for lifelong cloud protection
+    try {
+      const rawLogs = localStorage.getItem(`sabit_user_logs_${userId}`) || localStorage.getItem(LIFELONG_LOGS_KEY);
+      if (rawLogs) {
+        const parsedLogs = JSON.parse(rawLogs);
+        if (Array.isArray(parsedLogs) && parsedLogs.length > 0) {
+          for (const l of parsedLogs) {
+            if (l.habitId && l.date) {
+              const docId = l.id || `${l.habitId}_${l.date}`;
+              const logRef = doc(db, "users", userId, "habitLogs", docId);
+              await setDoc(logRef, {
+                id: docId,
+                habitId: l.habitId,
+                date: l.date,
+                status: l.status || "completed",
+                completedAt: l.completedAt || new Date().toISOString(),
+                createdAt: l.createdAt || new Date().toISOString()
+              }, { merge: true });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Lifelong logs cloud migration notice:", err);
     }
-
-    localStorage.setItem(migrationKey, "true");
   } catch (e) {
-    console.warn("User seeding warning:", e);
+    console.warn("User seeding/migration warning:", e);
   }
 }
 
@@ -699,32 +729,82 @@ export async function deleteHabitFromFirestore(userId: string, habitId: string) 
 
 // ==================== HABIT LOGS SERVICES ====================
 
+const LIFELONG_LOGS_KEY = "gammy_lifelong_logs_master";
+const LIFELONG_HABITS_KEY = "gammy_lifelong_habits_master";
+
+// Helper to merge local and cloud logs without losing any past history
+function mergeLogs(existing: HabitLogDoc[], incoming: HabitLogDoc[]): HabitLogDoc[] {
+  const map = new Map<string, HabitLogDoc>();
+  existing.forEach(l => {
+    const key = l.id || `${l.habitId}_${l.date}`;
+    map.set(key, l);
+  });
+  incoming.forEach(l => {
+    const key = l.id || `${l.habitId}_${l.date}`;
+    map.set(key, l);
+  });
+  return Array.from(map.values());
+}
+
 export function subscribeHabitLogs(userId: string, callback: (logs: HabitLogDoc[]) => void) {
   if (!userId || !isFirebaseEnabled || !db) {
-    callback([]);
+    // Return cached lifelong logs
+    try {
+      const cached = localStorage.getItem(`sabit_user_logs_${userId}`) || localStorage.getItem(LIFELONG_LOGS_KEY);
+      if (cached) callback(JSON.parse(cached));
+    } catch (_) {}
     return () => {};
   }
   const logsCol = collection(db, "users", userId, "habitLogs");
 
-  // Immediate direct fetch
+  // Immediate direct fetch for instantaneous response
   getDocs(logsCol).then((snapshot) => {
     if (!snapshot.empty) {
-      const logs = snapshot.docs.map((d) => ({
+      const cloudLogs = snapshot.docs.map((d) => ({
         id: d.id,
         ...d.data()
       })) as HabitLogDoc[];
-      callback(logs);
+
+      // Merge with locally stored logs to guarantee zero data loss
+      let merged = cloudLogs;
+      try {
+        const local = localStorage.getItem(`sabit_user_logs_${userId}`) || localStorage.getItem(LIFELONG_LOGS_KEY);
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed)) {
+            merged = mergeLogs(parsed, cloudLogs);
+          }
+        }
+        localStorage.setItem(`sabit_user_logs_${userId}`, JSON.stringify(merged));
+        localStorage.setItem(LIFELONG_LOGS_KEY, JSON.stringify(merged));
+      } catch (_) {}
+
+      callback(merged);
     }
   }).catch(err => console.warn("Direct logs fetch notice:", err));
 
   return onSnapshot(
     logsCol,
     (snapshot) => {
-      const logs = snapshot.docs.map((d) => ({
+      const cloudLogs = snapshot.docs.map((d) => ({
         id: d.id,
         ...d.data()
       })) as HabitLogDoc[];
-      callback(logs);
+      
+      let merged = cloudLogs;
+      try {
+        const local = localStorage.getItem(`sabit_user_logs_${userId}`) || localStorage.getItem(LIFELONG_LOGS_KEY);
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed)) {
+            merged = mergeLogs(parsed, cloudLogs);
+          }
+        }
+        localStorage.setItem(`sabit_user_logs_${userId}`, JSON.stringify(merged));
+        localStorage.setItem(LIFELONG_LOGS_KEY, JSON.stringify(merged));
+      } catch (_) {}
+
+      callback(merged);
     },
     (error) => {
       console.warn("Habit logs snapshot listener warning:", error);
@@ -743,7 +823,31 @@ export async function setHabitLogStatus(
 ) {
   if (!userId || !habitId) return;
 
-  // Sync habit mark directly to Supabase database
+  const docId = `${habitId}_${dateStr}`;
+  const now = new Date().toISOString();
+
+  // 1. Update persistent local lifelong cache immediately
+  try {
+    const rawLogs = localStorage.getItem(`sabit_user_logs_${userId}`) || localStorage.getItem(LIFELONG_LOGS_KEY);
+    let logsList: HabitLogDoc[] = rawLogs ? JSON.parse(rawLogs) : [];
+    logsList = logsList.filter(l => !(l.habitId === habitId && l.date === dateStr));
+    if (status !== null) {
+      logsList.push({
+        id: docId,
+        habitId,
+        date: dateStr,
+        status,
+        completedAt: status === "completed" ? now : "",
+        createdAt: now
+      });
+    }
+    localStorage.setItem(`sabit_user_logs_${userId}`, JSON.stringify(logsList));
+    localStorage.setItem(LIFELONG_LOGS_KEY, JSON.stringify(logsList));
+  } catch (err) {
+    console.warn("Local log cache warning:", err);
+  }
+
+  // 2. Sync habit mark directly to Supabase database
   try {
     await saveHabitLogToSupabase(userId, habitId, dateStr, status);
   } catch (e) {
@@ -751,15 +855,14 @@ export async function setHabitLogStatus(
   }
 
   if (!isFirebaseEnabled || !db) return;
-  const docId = `${habitId}_${dateStr}`;
   const path = `users/${userId}/habitLogs/${docId}`;
   const logRef = doc(db, "users", userId, "habitLogs", docId);
 
+  // 3. Persist to Cloud Firestore for lifelong durability
   try {
     if (status === null) {
       await deleteDoc(logRef);
     } else {
-      const now = new Date().toISOString();
       const payload: HabitLogDoc = {
         id: docId,
         habitId,
@@ -768,8 +871,17 @@ export async function setHabitLogStatus(
         completedAt: status === "completed" ? now : "",
         createdAt: now
       };
-      await setDoc(logRef, payload);
+      await setDoc(logRef, payload, { merge: true });
     }
+
+    // 4. Update lifelong master ledger document in Firestore
+    try {
+      const masterRef = doc(db, "users", userId, "allHabitsMaster", "lifelong");
+      await setDoc(masterRef, {
+        lastUpdated: now,
+        userId,
+      }, { merge: true });
+    } catch (_) {}
   } catch (error) {
     try {
       handleFirestoreError(error, OperationType.WRITE, path);

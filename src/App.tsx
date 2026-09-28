@@ -15,6 +15,9 @@ import SettingsModal from "./components/SettingsModal";
 import { AuthModal } from "./components/AuthModal";
 import { LandingScreen } from "./components/LandingScreen";
 import { PerformanceView, AccountView, SignOutView } from "./components/ExtraViews";
+import { SocialShareModal } from "./components/SocialShareModal";
+import { PaymentModal } from "./components/PaymentModal";
+import InteractiveGrid from "./components/InteractiveGrid";
 import { 
   onAuthChange, 
   logoutUser, 
@@ -38,9 +41,11 @@ import {
 } from "./lib/supabaseService";
 import { supabase } from "./supabaseClient";
 
-// Storage key constants
+// Storage key constants for lifelong durability
 const HABITS_MASTER_KEY = "sabit_habits_master";
 const LOGS_MASTER_KEY = "sabit_all_logs_master";
+const LIFELONG_HABITS_KEY = "gammy_lifelong_habits_master";
+const LIFELONG_LOGS_KEY = "gammy_lifelong_logs_master";
 
 const getDateStrForDay = (dayNum: number, monthName: string, yearStr: string) => {
   const months = [
@@ -82,13 +87,19 @@ export default function App() {
 
   const [user, setUser] = useState<any | null>(null);
   const prevUserRef = useRef<any>(null);
+  const lastCelebrationTimeRef = useRef<number>(0);
   const [loginCelebration, setLoginCelebration] = useState<{
     active: boolean;
     title: string;
     subtitle: string;
   } | null>(null);
 
-  const triggerLoginCelebration = (title = "Login Successful!", subtitle = "Welcome to Gammy. Loading your habit dashboard...") => {
+  const triggerLoginCelebration = (title = "Logged in successfully", subtitle = "Welcome to Gammy. Loading your habit dashboard...") => {
+    const now = Date.now();
+    if (now - lastCelebrationTimeRef.current < 4500) {
+      return; // Deduplicate to strictly show only once
+    }
+    lastCelebrationTimeRef.current = now;
     setLoginCelebration({ active: true, title, subtitle });
     setTimeout(() => {
       setLoginCelebration(null);
@@ -105,6 +116,8 @@ export default function App() {
   const [authModalMode, setAuthModalMode] = useState<"login" | "signup" | "forgot" | "verify">("login");
   const [authModalUnverifiedEmail, setAuthModalUnverifiedEmail] = useState<string | undefined>(undefined);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   // Storage key based on Month and Year
   const habitsKey = `sabit_habits_${currentMonth}_${currentYear}`;
@@ -121,12 +134,17 @@ export default function App() {
             if (Array.isArray(parsed) && parsed.length > 0) return parsed;
           }
         }
+        const lifelongHabits = localStorage.getItem(LIFELONG_HABITS_KEY) || localStorage.getItem(HABITS_MASTER_KEY);
+        if (lifelongHabits) {
+          const parsed = JSON.parse(lifelongHabits);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
       } catch (_) {}
     }
     return initialHabits;
   });
 
-  // Synchronously initialize logs from local cache so all past recordings appear immediately
+  // Synchronously initialize logs from local cache so all past recordings appear immediately for lifelong keeping
   const [habitLogs, setHabitLogs] = useState<any[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -135,8 +153,13 @@ export default function App() {
           const userLogs = localStorage.getItem(`sabit_user_logs_${lastUid}`);
           if (userLogs) {
             const parsed = JSON.parse(userLogs);
-            if (Array.isArray(parsed)) return parsed;
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
           }
+        }
+        const lifelongLogs = localStorage.getItem(LIFELONG_LOGS_KEY) || localStorage.getItem(LOGS_MASTER_KEY);
+        if (lifelongLogs) {
+          const parsed = JSON.parse(lifelongLogs);
+          if (Array.isArray(parsed)) return parsed;
         }
       } catch (_) {}
     }
@@ -314,7 +337,7 @@ export default function App() {
         }
       });
 
-      const streak = recalculateStreakAndDays(days);
+      const streak = recalculateStreakAndDays(raw.id, days);
 
       return {
         id: raw.id,
@@ -381,26 +404,48 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
   
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("sabit_theme") as "light" | "dark") || "light";
-    }
-    return "light";
-  });
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("sabit_theme") === "dark";
+      const saved = localStorage.getItem("sabit_theme");
+      if (saved === "dark") return true;
+      if (saved === "light") return false;
+      return true; // Default dark
     }
-    return false;
+    return true;
+  });
+
+  const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
+    return isDark ? "dark" : "light";
+  });
+
+  const [isGlassMode, setIsGlassMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sabit_glass_mode");
+      if (saved !== null) return saved === "true";
+    }
+    return true; // Default to true for clean Apple glassmorphism
   });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    localStorage.setItem("sabit_theme", isDark ? "dark" : "light");
-    if (isDark) {
-      document.documentElement.classList.add("dark");
+    localStorage.setItem("sabit_glass_mode", String(isGlassMode));
+    if (isGlassMode) {
+      document.documentElement.classList.add("glass-mode");
     } else {
-      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.remove("glass-mode");
+    }
+    window.dispatchEvent(new CustomEvent("sabit_glass_mode_changed", { detail: isGlassMode }));
+  }, [isGlassMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("sabit_theme", isDark ? "dark" : "light");
+    
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
     }
   }, [isDark]);
 
@@ -578,26 +623,77 @@ export default function App() {
     }
   };
 
-  // Algorithm to calculate individual habit streak
-  const recalculateStreakAndDays = (days: ('completed' | 'skipped' | 'locked')[]): number => {
+  // Algorithm to calculate individual habit streak across lifelong history and across month boundaries
+  const recalculateStreakAndDays = (habitId: string, days: ('completed' | 'skipped' | 'locked')[]): number => {
+    // 1. Check if we have records in habitLogs
+    const completedDates = new Set(
+      habitLogs
+        .filter((l) => l.habitId === habitId && l.status === "completed" && l.date)
+        .map((l) => l.date)
+    );
+
+    if (completedDates.size === 0) {
+      let currentStreak = 0;
+      let lastActiveIdx = -1;
+      for (let i = days.length - 1; i >= 0; i--) {
+        if (days[i] !== "locked") {
+          lastActiveIdx = i;
+          break;
+        }
+      }
+      if (lastActiveIdx === -1) return 0;
+      for (let i = lastActiveIdx; i >= 0; i--) {
+        if (days[i] === "completed") {
+          currentStreak++;
+        } else if (days[i] === "skipped") {
+          continue;
+        } else {
+          break;
+        }
+      }
+      return currentStreak;
+    }
+
+    const formatYMD = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    const today = new Date();
+    const todayStr = formatYMD(today);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = formatYMD(yesterday);
+
     let currentStreak = 0;
-    let lastActiveIdx = -1;
-    for (let i = days.length - 1; i >= 0; i--) {
-      if (days[i] !== "locked") {
-        lastActiveIdx = i;
+    let pointer = new Date(today);
+
+    // If today is completed, count it and look backwards from yesterday. If not completed yet today, check yesterday
+    if (completedDates.has(todayStr)) {
+      currentStreak = 1;
+      pointer.setDate(pointer.getDate() - 1);
+    } else if (completedDates.has(yesterdayStr)) {
+      currentStreak = 0;
+      pointer = new Date(yesterday);
+    } else {
+      return 0;
+    }
+
+    // Traverse consecutively backwards across any number of days, weeks, months or years
+    while (true) {
+      const dStr = formatYMD(pointer);
+      if (completedDates.has(dStr)) {
+        if (dStr !== todayStr) {
+          currentStreak++;
+        }
+        pointer.setDate(pointer.getDate() - 1);
+      } else {
         break;
       }
     }
 
-    if (lastActiveIdx === -1) return 0;
-
-    for (let i = lastActiveIdx; i >= 0; i--) {
-      if (days[i] === "completed") {
-        currentStreak++;
-      } else if (days[i] === "skipped") {
-        break;
-      }
-    }
     return currentStreak;
   };
 
@@ -631,17 +727,18 @@ export default function App() {
       if (h.id !== habitId) return h;
       const newDays = [...h.days];
       newDays[dayIndex] = nextStatus;
-      const newStreak = recalculateStreakAndDays(newDays);
+      const newStreak = recalculateStreakAndDays(habitId, newDays);
       return { ...h, days: newDays, streak: newStreak };
     });
     setHabits(updatedHabits);
 
-    // Save to LocalStorage strictly scoped to current UID
+    // Save to LocalStorage strictly scoped to current UID + lifelong master
     const uid = user?.uid;
     if (uid) {
       try {
         localStorage.setItem(`sabit_user_habits_${uid}_${habitsKey}`, JSON.stringify(updatedHabits));
         localStorage.setItem(`sabit_user_habits_${uid}`, JSON.stringify(rawHabits));
+        localStorage.setItem(LIFELONG_HABITS_KEY, JSON.stringify(rawHabits));
       } catch (e) {
         console.warn("LocalStorage write notice:", e);
       }
@@ -662,11 +759,13 @@ export default function App() {
       if (nextStatus !== "locked") {
         filtered.push(logObj);
       }
-      if (uid) {
-        try {
+      try {
+        if (uid) {
           localStorage.setItem(`sabit_user_logs_${uid}`, JSON.stringify(filtered));
-        } catch (_) {}
-      }
+        }
+        localStorage.setItem(LIFELONG_LOGS_KEY, JSON.stringify(filtered));
+        localStorage.setItem(LOGS_MASTER_KEY, JSON.stringify(filtered));
+      } catch (_) {}
       return filtered;
     });
 
@@ -872,6 +971,7 @@ export default function App() {
           }}
           isDark={isDark}
           setIsDark={setIsDark}
+          onOpenPayment={() => setIsPaymentModalOpen(true)}
         />
 
         {/* Authentication Modal */}
@@ -884,7 +984,6 @@ export default function App() {
           isDark={isDark}
           onSuccess={(msg) => {
             triggerLoginCelebration("Logged in successfully", user?.email || msg || "Welcome to Gammy!");
-            triggerToast(msg);
             setShowLandingPage(false);
             setActiveTab("dashboard");
             localStorage.removeItem("gammy_is_logged_out");
@@ -892,6 +991,18 @@ export default function App() {
           }}
           initialMode={authModalMode}
           initialUnverifiedEmail={authModalUnverifiedEmail}
+        />
+
+        {/* Home Screen UPI & Card Payment Gateway Modal */}
+        <PaymentModal
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          isDark={isDark}
+          userEmail={user?.email || localStorage.getItem("sabit_profile_email") || "anoopbrown0@gmail.com"}
+          userName={user?.displayName || localStorage.getItem("sabit_profile_name") || "Anoop Brown"}
+          onPaymentSuccess={(plan, method, txnId) => {
+            triggerToast(`Gammy Lifetime Pass activated! Txn ID: ${txnId}`);
+          }}
         />
       </div>
     );
@@ -915,9 +1026,25 @@ export default function App() {
   return (
     <div 
       className={`min-h-screen font-sans antialiased transition-colors duration-300 relative ${
-        isDark ? "bg-[#000000] text-slate-100" : "bg-[#F2F2F7] text-[#1C1C1E]"
+        isGlassMode ? "glass-mode" : ""
+      } ${
+        isDark 
+          ? isGlassMode ? "bg-[#070B14] text-slate-100" : "bg-[#000000] text-slate-100" 
+          : isGlassMode ? "bg-[#F4F6FB] text-[#1C1C1E]" : "bg-[#F2F2F7] text-[#1C1C1E]"
       }`}
     >
+      {/* Dynamic ambient gradient glow orbs for high-end glass refraction */}
+      {isGlassMode && (
+        <div className="glass-ambient-orbs" aria-hidden="true">
+          <div className="glass-orb-1" />
+          <div className="glass-orb-2" />
+          <div className="glass-orb-3" />
+        </div>
+      )}
+
+      {/* Narrow Architectural Moving Grid Background reacting smoothly to mouse movement */}
+      <InteractiveGrid density="narrow" className="fixed inset-0 z-0 opacity-75 dark:opacity-35" />
+
       {/* Simple White Screen Login Success Card over Blurred Dashboard */}
       {loginCelebration?.active && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-md animate-fadeIn">
@@ -963,7 +1090,7 @@ export default function App() {
       } ${
         isBeastMode ? "ring-4 ring-rose-500/80 shadow-[0_0_50px_rgba(244,63,94,0.4)]" : ""
       } ${
-        isDark ? "bg-[#000000]" : "bg-[#F2F2F7]"
+        isGlassMode ? "bg-transparent" : (isDark ? "bg-[#000000]" : "bg-[#F2F2F7]")
       }`}>
         {/* Floating Interactive Toast */}
         {toastMessage && (
@@ -977,7 +1104,7 @@ export default function App() {
 
         {/* Master Workspace Content Area - Full Width */}
         <main className={`flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-3.5 sm:py-5 pb-28 sm:pb-32 flex flex-col min-h-screen transition-colors duration-300 relative ${
-          isDark ? "bg-[#000000]" : "bg-[#F2F2F7]"
+          isGlassMode ? "bg-transparent" : (isDark ? "bg-[#000000]" : "bg-[#F2F2F7]")
         }`}>
           
           {/* Header */}
@@ -990,6 +1117,8 @@ export default function App() {
             setCurrentDay={setCurrentDay}
             isDark={isDark}
             setIsDark={setIsDark}
+            isGlassMode={isGlassMode}
+            setIsGlassMode={setIsGlassMode}
             onNotificationClick={handleNotificationClick}
             onOpenAICoach={() => setIsAICoachOpen(true)}
             user={user}
@@ -1000,6 +1129,7 @@ export default function App() {
             onSignOut={handleSignOut}
             onGoToLanding={() => setShowLandingPage(true)}
             onResetProgress={handleResetProgress}
+            onOpenShareModal={() => setIsShareModalOpen(true)}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             colorTheme={colorTheme}
@@ -1117,6 +1247,7 @@ export default function App() {
                   currentDay={currentDay}
                   onAddHabitClick={handleOpenAddHabit}
                   onEditHabitClick={handleOpenEditHabit}
+                  onOpenShareModal={() => setIsShareModalOpen(true)}
                   viewMode={viewMode}
                   isDark={isDark}
                   onSelectDay={setCurrentDay}
@@ -1282,6 +1413,8 @@ export default function App() {
             <AccountView
               isDark={isDark}
               setIsDark={setIsDark}
+              isGlassMode={isGlassMode}
+              setIsGlassMode={setIsGlassMode}
               theme={theme}
               setTheme={setTheme}
               colorTheme={colorTheme}
@@ -1357,6 +1490,8 @@ export default function App() {
           onClose={() => setIsSettingsOpen(false)}
           isDark={isDark}
           setIsDark={setIsDark}
+          isGlassMode={isGlassMode}
+          setIsGlassMode={setIsGlassMode}
           onResetProgress={handleResetProgress}
           onDeleteAllHabits={handleDeleteAllHabits}
         />
@@ -1371,7 +1506,6 @@ export default function App() {
           isDark={isDark}
           onSuccess={(msg) => {
             triggerLoginCelebration("Logged in successfully", user?.email || msg || "Welcome to Gammy!");
-            triggerToast(msg);
             setIsAuthModalOpen(false);
           }}
           initialMode={authModalMode}
@@ -1428,6 +1562,32 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Social Media Habit Completion Card Modal */}
+        <SocialShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          habits={habits}
+          currentDay={currentDay}
+          currentMonth={currentMonth}
+          currentYear={currentYear}
+          userName={user?.displayName || localStorage.getItem("sabit_profile_name") || "Anoop"}
+          userEmail={user?.email || "anoopbrown0@gmail.com"}
+          currentStreak={currentStreak}
+          isDark={isDark}
+        />
+
+        {/* UPI & Credit Card Payment Gateway Checkout Modal */}
+        <PaymentModal
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          isDark={isDark}
+          userEmail={user?.email || localStorage.getItem("sabit_profile_email") || "anoopbrown0@gmail.com"}
+          userName={user?.displayName || localStorage.getItem("sabit_profile_name") || "Anoop Brown"}
+          onPaymentSuccess={(plan, method, txnId) => {
+            triggerToast(`Upgraded to ${plan.name}! Verification ID: ${txnId}`);
+          }}
+        />
 
       </div>
     </div>

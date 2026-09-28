@@ -108,3 +108,5 @@ export interface WeeklyInsight {
   message: string;
   metric: string;
 }
+
+export type ThemeMode = "light" | "dark";

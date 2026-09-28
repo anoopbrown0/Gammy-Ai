@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import LucideIcon from "./LucideIcon";
 import { GammyLogo } from "./GammyLogo";
 
@@ -11,6 +12,8 @@ interface HeaderProps {
   setCurrentDay: (day: number) => void;
   isDark: boolean;
   setIsDark: (dark: boolean) => void;
+  isGlassMode?: boolean;
+  setIsGlassMode?: (glass: boolean) => void;
   colorTheme?: string;
   setColorTheme?: (theme: string) => void;
   onNotificationClick: () => void;
@@ -19,6 +22,8 @@ interface HeaderProps {
   onSignOut?: () => void;
   onGoToLanding?: () => void;
   onResetProgress?: () => void;
+  onOpenShareModal?: () => void;
+  onOpenPaymentModal?: () => void;
   activeTab?: string;
   setActiveTab?: (tab: string) => void;
 }
@@ -41,16 +46,7 @@ const getFirstDayOfWeek = (monthName: string, yearStr: string): number => {
 };
 
 const getTimeBasedGreeting = (): string => {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) {
-    return "Good Morning";
-  } else if (hour >= 12 && hour < 17) {
-    return "Good Afternoon";
-  } else if (hour >= 17 && hour < 22) {
-    return "Good Evening";
-  } else {
-    return "Good Night";
-  }
+  return "Good Morning";
 };
 
 export const Header: React.FC<HeaderProps> = ({
@@ -62,12 +58,16 @@ export const Header: React.FC<HeaderProps> = ({
   setCurrentDay,
   isDark,
   setIsDark,
+  isGlassMode = true,
+  setIsGlassMode,
   onNotificationClick,
   user = null,
   onOpenAuthModal,
   onSignOut,
   onGoToLanding,
   onResetProgress,
+  onOpenShareModal,
+  onOpenPaymentModal,
   activeTab = "dashboard",
   setActiveTab,
 }) => {
@@ -142,6 +142,12 @@ export const Header: React.FC<HeaderProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleOpenCalendar = () => setShowCalendar(true);
+    window.addEventListener("sabit_open_calendar", handleOpenCalendar);
+    return () => window.removeEventListener("sabit_open_calendar", handleOpenCalendar);
+  }, []);
+
   const totalDaysInMonth = getDaysInMonth(currentMonth, currentYear);
   const firstDayOfWeek = getFirstDayOfWeek(currentMonth, currentYear);
 
@@ -176,6 +182,9 @@ export const Header: React.FC<HeaderProps> = ({
   const handleSelectDay = (day: number) => {
     setCurrentDay(day);
     setShowCalendar(false);
+    window.dispatchEvent(new CustomEvent("sabit_date_selected", {
+      detail: { day, month: currentMonth, year: currentYear }
+    }));
   };
 
   const handleJumpToToday = () => {
@@ -188,6 +197,9 @@ export const Header: React.FC<HeaderProps> = ({
     setCurrentYear(curY);
     setCurrentDay(curD);
     setShowCalendar(false);
+    window.dispatchEvent(new CustomEvent("sabit_date_selected", {
+      detail: { day: curD, month: curM, year: curY }
+    }));
   };
 
   const handleSaveProfileName = () => {
@@ -252,8 +264,8 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className={`h-6 w-[1px] hidden sm:block ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
 
-        {/* Dynamic Time-Based Greeting with User's Name */}
-        <div className="flex flex-col justify-center min-w-0">
+        {/* Dynamic Time-Based Greeting with User's Name - Hidden on mobile view (<sm) */}
+        <div className="hidden sm:flex flex-col justify-center min-w-0">
           <h1 className="text-xs sm:text-sm md:text-base tracking-tight truncate flex items-center gap-1.5">
             <span className="font-serif italic font-normal text-slate-500 dark:text-slate-400">
               {timeGreeting}{userFirstName ? "," : ""}
@@ -270,7 +282,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Right Controls Area */}
       <div className="flex items-center gap-2 shrink-0">
 
-        {/* Date Selector Pill */}
+        {/* Date Selector Pill - Restored to previous right controls position */}
         <div className="relative" ref={calendarRef}>
           <button
             id="header-date-picker-btn"
@@ -281,90 +293,112 @@ export const Header: React.FC<HeaderProps> = ({
                 ? "bg-white/10 border border-white/10 text-slate-200 hover:bg-white/15" 
                 : "bg-slate-100/90 border border-slate-200/80 text-slate-700 hover:bg-slate-200/80"
             }`}
+            title="Click to view centered calendar"
           >
             <LucideIcon name="Calendar" size={14} className="text-[#007AFF]" />
-            <span className="hidden sm:inline">{currentMonth} {currentDay}, {currentYear}</span>
-            <span className="inline sm:hidden text-[11px]">{currentMonth.slice(0, 3)} {currentDay}</span>
+            <span>{currentMonth} {currentDay}, {currentYear}</span>
             <LucideIcon name="ChevronDown" size={12} className="text-slate-400 transition-transform duration-200" style={{ transform: showCalendar ? 'rotate(180deg)' : 'none' }} />
           </button>
+        </div>
 
-          {showCalendar && (
-            <>
-              <div 
-                className="fixed inset-0 bg-slate-950/20 dark:bg-black/40 backdrop-blur-xs z-40 transition-opacity cursor-pointer"
-                onClick={() => setShowCalendar(false)}
-              />
-              <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 p-4 rounded-xl shadow-xl z-50 border transition-all duration-200 flex flex-col gap-3 animate-zoom-in ${
-                isDark 
-                  ? "bg-slate-900 border-slate-800 text-slate-100" 
-                  : "bg-white border-slate-200 text-slate-900"
-              }`}>
-                <div className="flex items-center justify-between font-semibold pb-2 border-b border-slate-100 dark:border-slate-800">
-                  <button 
-                    type="button"
-                    onClick={handlePrevMonth}
-                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-slate-500"
-                  >
-                    <LucideIcon name="ChevronLeft" size={14} />
-                  </button>
-                  <span className="text-xs font-bold tracking-tight">
-                    {currentMonth} {currentYear}
-                  </span>
-                  <button 
-                    type="button"
-                    onClick={handleNextMonth}
-                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-slate-500"
-                  >
-                    <LucideIcon name="ChevronRight" size={14} />
-                  </button>
-                </div>
+        {/* Universal Centered Modal Calendar Dialog - Rendered via createPortal into document.body to center on full screen */}
+        {showCalendar && typeof document !== "undefined" && createPortal(
+          <div 
+            className="fixed inset-0 z-[999] flex items-center justify-center p-4 overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Select Date Calendar"
+          >
+            <div 
+              className="fixed inset-0 bg-black/70 backdrop-blur-md transition-opacity cursor-pointer animate-fadeIn"
+              onClick={() => setShowCalendar(false)}
+            />
+            <div className={`relative w-full max-w-xs m-auto p-5 rounded-3xl shadow-2xl z-[1000] border transition-all duration-200 flex flex-col gap-3.5 animate-zoom-in ${
+              isDark 
+                ? "bg-[#141924]/95 border-white/15 text-slate-100 shadow-black/90 ring-1 ring-white/10" 
+                : "bg-white/95 border-slate-200/90 text-slate-900 shadow-slate-400/40"
+            }`}>
+              {/* Header Month / Year Navigation */}
+              <div className="flex items-center justify-between font-semibold pb-2 border-b border-slate-200/70 dark:border-white/10">
+                <button 
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  aria-label="Previous Month"
+                >
+                  <LucideIcon name="ChevronLeft" size={16} />
+                </button>
+                <span className="text-sm font-extrabold tracking-tight">
+                  {currentMonth} {currentYear}
+                </span>
+                <button 
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  aria-label="Next Month"
+                >
+                  <LucideIcon name="ChevronRight" size={16} />
+                </button>
+              </div>
 
-                <div className="grid grid-cols-7 gap-1 text-center font-black uppercase text-[10px] text-slate-700 dark:text-slate-300">
-                  <span>Su</span>
-                  <span>Mo</span>
-                  <span>Tu</span>
-                  <span>We</span>
-                  <span>Th</span>
-                  <span>Fr</span>
-                  <span>Sa</span>
-                </div>
+              {/* Day of Week Headers */}
+              <div className="grid grid-cols-7 gap-1 text-center font-black uppercase text-[10px] text-slate-500 dark:text-slate-400">
+                <span>Su</span>
+                <span>Mo</span>
+                <span>Tu</span>
+                <span>We</span>
+                <span>Th</span>
+                <span>Fr</span>
+                <span>Sa</span>
+              </div>
 
-                <div className="grid grid-cols-7 gap-1">
-                  {gridItems.map((item, idx) => {
-                    if (item === null) {
-                      return <div key={`empty-${idx}`} />;
-                    }
-                    const isSelected = item === currentDay;
-                    return (
-                      <button
-                        key={`day-${item}`}
-                        type="button"
-                        onClick={() => handleSelectDay(item)}
-                        className={`h-7 w-7 flex items-center justify-center rounded text-[11px] font-bold transition-all cursor-pointer ${
-                          isSelected
-                            ? "bg-blue-600 text-white font-black"
-                            : isDark 
-                              ? "text-slate-200 hover:bg-slate-800" 
-                              : "text-slate-800 hover:bg-slate-100"
-                        }`}
-                      >
-                        {item}
-                      </button>
-                    );
-                  })}
-                </div>
+              {/* Days Matrix */}
+              <div className="grid grid-cols-7 gap-1.5">
+                {gridItems.map((item, idx) => {
+                  if (item === null) {
+                    return <div key={`empty-${idx}`} />;
+                  }
+                  const isSelected = item === currentDay;
+                  return (
+                    <button
+                      key={`day-${item}`}
+                      type="button"
+                      onClick={() => handleSelectDay(item)}
+                      className={`h-8 w-8 flex items-center justify-center rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-blue-600 text-white font-black shadow-md shadow-blue-600/30 scale-105"
+                          : isDark 
+                            ? "text-slate-200 hover:bg-white/10" 
+                            : "text-slate-800 hover:bg-slate-100"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  );
+                })}
+              </div>
 
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/70 dark:border-white/10">
                 <button
                   type="button"
                   onClick={handleJumpToToday}
-                  className="w-full py-1.5 mt-1 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold rounded text-[11px] hover:bg-slate-200 dark:hover:bg-slate-700 transition-all cursor-pointer text-center"
+                  className="flex-1 py-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 font-extrabold rounded-xl text-xs transition-all cursor-pointer text-center"
                 >
-                  Jump to Today
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCalendar(false)}
+                  className="px-3.5 py-2 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs transition-all cursor-pointer text-center"
+                >
+                  Close
                 </button>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
         {/* Notification Bell */}
         <button
@@ -386,6 +420,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
+
         {/* Dark/Light Mode Switch Toggle */}
         <button
           type="button"
@@ -396,6 +431,7 @@ export const Header: React.FC<HeaderProps> = ({
               : "bg-slate-100/90 border border-slate-200/80 text-slate-700 hover:bg-slate-200/80"
           }`}
           title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          aria-label="Toggle theme"
         >
           <LucideIcon name={isDark ? "Sun" : "Moon"} size={15} />
         </button>
@@ -460,6 +496,28 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="flex items-center gap-2">
                     <LucideIcon name="User" size={14} className={activeTab === "account" ? "text-white" : "text-[#007AFF]"} />
                     <span>Account & Settings</span>
+                  </div>
+                  <LucideIcon name="ChevronRight" size={12} className="opacity-60" />
+                </button>
+              )}
+
+              {/* Link to Home Screen */}
+              {onGoToLanding && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileHub(false);
+                    onGoToLanding();
+                  }}
+                  className={`w-full py-2 px-3 text-xs font-semibold rounded-xl transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                    isDark
+                      ? "bg-slate-800/60 hover:bg-slate-800 text-slate-200 border border-slate-700/50"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <LucideIcon name="Home" size={14} className="text-[#007AFF]" />
+                    <span>Home & Landing</span>
                   </div>
                   <LucideIcon name="ChevronRight" size={12} className="opacity-60" />
                 </button>

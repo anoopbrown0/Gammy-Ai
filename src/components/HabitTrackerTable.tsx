@@ -13,6 +13,7 @@ interface HabitTrackerTableProps {
   currentDay?: number;
   onAddHabitClick?: () => void;
   onEditHabitClick?: (habit: Habit) => void;
+  onOpenShareModal?: () => void;
   viewMode: "week" | "month";
   isDark?: boolean;
   onSelectDay?: (day: number) => void;
@@ -115,6 +116,7 @@ export const HabitTrackerTable: React.FC<HabitTrackerTableProps> = ({
   currentDay = 21,
   onAddHabitClick,
   onEditHabitClick,
+  onOpenShareModal,
   viewMode,
   isDark = false,
   onSelectDay,
@@ -207,7 +209,15 @@ export const HabitTrackerTable: React.FC<HabitTrackerTableProps> = ({
         isDark ? "border-slate-800" : "border-[#E5E7EB]"
       }`}>
         <div>
-          <h4 className={`font-bold text-xs tracking-tight ${isDark ? "text-slate-100" : "text-[#0F172A]"}`}>Active Habits Ledger</h4>
+          <div className="flex items-center gap-2">
+            <h4 className={`font-bold text-xs tracking-tight ${isDark ? "text-slate-100" : "text-[#0F172A]"}`}>
+              Active Habits Ledger
+            </h4>
+            <span className="hidden sm:inline-flex items-center gap-1 text-[8.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Lifelong Cloud Sync</span>
+            </span>
+          </div>
           <p className={`${isDark ? "text-slate-400" : "text-[#64748B]"} text-[10px] font-medium uppercase tracking-wider mt-0.5`}>
             {currentMonth} {currentYear} • Daily Action Registry
           </p>
@@ -215,6 +225,22 @@ export const HabitTrackerTable: React.FC<HabitTrackerTableProps> = ({
 
         {/* Global Controls */}
         <div className="flex items-center gap-2">
+          {onOpenShareModal && (
+            <button
+              id="tracker-share-card-btn"
+              onClick={onOpenShareModal}
+              className={`h-8 px-3 rounded-xl text-[10px] font-bold shadow-xs hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-1.5 cursor-pointer border ${
+                isDark
+                  ? "bg-white/10 hover:bg-white/15 border-white/15 text-white"
+                  : "bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs"
+              }`}
+              title="Share Habit Completion Card"
+            >
+              <LucideIcon name="Share2" size={11} strokeWidth={2.2} className="text-blue-500" />
+              <span>Share Card</span>
+            </button>
+          )}
+
           {onAddHabitClick && (
             <button
               id="tracker-add-habit-btn"
